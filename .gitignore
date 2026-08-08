@@ -23,5 +23,11 @@ drizzle/**/*.sql.bak
 .DS_Store
 *.log
 
+# agent context (local only)
+GEMINI.md
+AGENTS.md
+CLAUDE.md
+.agent/
+
 # SDD / port scratch (agents)
 .superpowers/
