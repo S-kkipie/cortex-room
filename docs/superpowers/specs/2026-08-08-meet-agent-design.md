@@ -1,4 +1,4 @@
-# Meet Transcription Agent — Design Spec
+# Meet Transcription Agent — Design Spec (v2: participant bot)
 
 **Date:** 2026-08-08
 **Status:** Approved design, pending implementation plan
@@ -6,38 +6,37 @@
 
 ## 1. Goal
 
-A service that connects to a Google Meet conference, consumes real-time audio via the Google Meet Media API, transcribes it with streaming speech-to-text, attributes each utterance to a participant, and publishes structured transcript events to:
+A bot that joins a Google Meet conference as a regular participant, captures the meeting audio, transcribes it with streaming speech-to-text, attributes each utterance to a participant, and publishes structured transcript events to:
 
 1. A Portal (useportal.co) realtime channel, consumed by the collaborative canvas (owned by a teammate — out of scope here).
 2. A REST/SSE testing API for direct inspection.
 
-## 2. Context and constraints (verified against Google docs)
+## 2. Why a participant bot (and not the Meet Media API)
 
-- **Meet Media API is in Google Workspace Developer Preview.** The GCP project, the OAuth principal, and **all meeting participants** must be enrolled in the Developer Preview Program. This limits the MVP to controlled demos with enrolled accounts.
-- The API delivers **raw media over WebRTC** (SDP offer/answer, ICE, RTP, data channels). Audio codec is **Opus**; the offer must include exactly 3 receive-only audio media descriptions. It does **not** provide transcription.
-- Clients must support video codecs (VP8, VP9, AV1) and specific RTP header extensions even for audio-focused use, and Google recommends `libwebrtc` no more than 12 months behind Chromium STABLE. Minimum bandwidth 4 Mbps.
-- Each participant is assigned a unique **CSRC** on join; the CSRC in each RTP packet header identifies the true source. Participant metadata is delivered over data channels. The `ssrc-audio-level` header extension is required, which gives per-packet speaker activity.
-- Only **one Media API client** may connect to a conference at a time.
-- Google's **TypeScript reference client runs in a browser** (requires Chrome ≥ 94, webpack, OAuth implicit flow). The C++ reference client ships a Dockerfile.
-- Connection is refused for: encrypted/watermarked meetings, meetings with underage accounts, some consumer-owned meetings, or when the host disables access (`DISABLED_BY_ADMIN`). Consent dialog must be accepted by host/co-host/org participant.
-- OAuth scopes: `meetings.conference.media.audio.readonly` (audio-only) + `meetings.space.read` for metadata.
-- Meet REST API transcripts exist but are **post-meeting only** — rejected as primary source because the product requires live canvas updates.
+The Google Meet **Media API** was evaluated first (v1 of this spec). Verified blockers:
+
+- It is in **Google Workspace Developer Preview**: the GCP project, OAuth principal, and **every meeting participant** must be enrolled, enrollment requires a Google Workspace account, and preview features "may not be included in public applications prior to the General Availability (GA) announcement".
+- The team currently has **no Google Workspace account** (consumer gmail only), which makes enrollment impossible and blocks even a private demo.
+- Meet REST API transcripts are post-meeting only — incompatible with a live canvas.
+
+Therefore v2: a **headless-browser bot** that joins meet.google.com as an ordinary guest. Works with any gmail account, no enrollment, publishable now. Trade-offs are accepted and listed in §10. The event contract is source-agnostic, so a future migration back to the Media API (at GA, or once Workspace exists) only replaces the capture module (`src/meet/`).
 
 ## 3. Key decisions
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Media source | Meet Media API (real-time) | Live canvas is the product vision; REST transcripts are post-meeting only |
-| STT | AssemblyAI streaming (WebSocket) | User choice; streaming latency acceptable, decent Spanish |
-| LLM | None in this phase | Scope cut by user. Phase 2 will use Gemini (user has API credits) |
-| Hosting | Cloudflare Workers + Durable Objects + Containers | User choice. Container is mandatory (WebRTC needs full networking); Worker/DO are the platform-imposed entrypoint (~30 lines) |
-| Meet client runtime | Headless Chromium (Playwright) inside the container running Google's TS reference client | TS client is browser-only; Chromium satisfies codec/header-extension requirements for free; keeps the stack TypeScript. C++ client is the fallback if this proves unworkable |
-| Canvas transport | Portal channel `meeting-{id}` | Teammate's canvas already uses Portal. Portal SDK is client-only by design; if publishing from Node fails, canvas falls back to our SSE endpoint |
+| Meeting access | Headless Chromium (Playwright) joins as guest participant "Cortex Notetaker"; host admits it manually | No Workspace/Preview requirements; publishable now |
+| Audio capture | Tab audio capture (mixed stream) inside Chromium | Only audio surface available to a participant bot |
+| Speaker identity | AssemblyAI diarization × DOM active-speaker indicator, correlated by time | Best available substitute for the Media API's CSRC attribution |
+| STT | AssemblyAI streaming (WebSocket) | User choice; streaming + diarization; decent Spanish |
+| LLM | None in this phase | Scope cut by user. Phase 2: Gemini structured output (user has API credits) |
+| Hosting | Cloudflare Workers + Durable Objects + Containers | User choice. Container is mandatory (Chromium + long-lived process); Worker/DO are the platform-imposed entrypoint (~30 lines) |
+| Canvas transport | Portal channel `meeting-{id}` | Teammate's canvas uses Portal. SDK is client-only; if Node publishing fails, canvas falls back to our SSE endpoint |
 | Repo layout | Monorepo `apps/meet-agent/` inside cortex-room | Shares zod types with the existing app; event contract exported as a shared package |
 
 Portal cannot host the agent: `@portalsdk/core` is a client-only WebSocket SDK (channels, presence, inbox) with server-side config limited to authz/middleware. It is transport, not compute.
 
-A plain Cloudflare Worker cannot run the agent: no UDP/ICE, no WebRTC stack, CPU limits. Cloudflare **Containers** provide a long-lived process with full networking, orchestrated by a Durable Object, with scale-to-zero billing (Workers Paid $5/mo; a 1h meeting on a `basic` instance costs cents).
+A plain Cloudflare Worker cannot run the bot: no Chromium, no long-lived process, CPU limits. Cloudflare **Containers** provide a long-lived process orchestrated by a Durable Object, with scale-to-zero billing (Workers Paid $5/mo; a 1h meeting on a `basic` instance costs cents).
 
 ## 4. Topology
 
@@ -49,9 +48,10 @@ cortex-room (monorepo)
    │   └─ MeetingAgent extends Container  # DO class wrapping the container
    └─ container/                  # Dockerfile: Node 22 + Chromium (Playwright)
        ├─ src/main.ts             # orchestrator + local HTTP server (port 8080)
-       ├─ src/meet/               # Playwright harness + Google TS reference client
-       ├─ src/stt/                # AssemblyAI streaming bridge
-       ├─ src/identity/           # CSRC → participant mapping
+       ├─ src/meet/               # Playwright harness: join flow, audio capture
+       ├─ src/meet-ui-adapter/    # ALL Meet DOM selectors centralized here
+       ├─ src/stt/                # AssemblyAI streaming bridge (+ diarization)
+       ├─ src/identity/           # diarized speaker × active-speaker correlation
        └─ src/emit/               # Portal publisher + segment buffer
 ```
 
@@ -63,38 +63,41 @@ cortex-room (monorepo)
 ## 5. Data flow
 
 ```text
-POST /meetings/:id/start {meetCode}
+POST /meetings/:id/start {meetUrl}
   → Worker → DO(meetingId) → container.start()
-  → container boots headless Chromium, loads Meet TS client with injected OAuth token
-  → Meet client: SDP offer → consent granted → STATE_JOINED
-  → audio frames + CSRC + participant metadata bridged from page to Node
-      (page.exposeFunction / CDP)
-  → Node: single mixed audio stream → AssemblyAI WS
-      active speaker resolved per utterance via ssrc-audio-level + CSRC map
-  → final utterance → TranscriptSegment
-  → fan-out to 3 sinks:
+  → container boots headless Chromium
+  → Playwright: open meetUrl → set name "Cortex Notetaker" → "Ask to join"
+  → host admits bot → in-meeting
+  → two parallel observers:
+      A) tab audio capture → PCM chunks → AssemblyAI WS (diarization on)
+      B) DOM observer (meet-ui-adapter):
+           - participant roster (joins/leaves)
+           - active-speaker indicator per tile, timestamped
+  → final utterance from AssemblyAI (speaker label + t0..t1)
+  → identity module: overlap utterance window with active-speaker timeline
+      → speaker resolved (inferred) | unresolved
+  → TranscriptSegment → fan-out to 3 sinks:
       1. DO SQLite (canonical store, replay)
       2. Portal channel meeting-{id}
       3. in-memory buffer for GET /transcript + SSE
 ```
 
-**Identity resolution.** The container maintains `Map<csrc, Participant>` built from participant metadata events. Each segment ships with the resolved speaker or an `unresolved` marker; late resolution re-emits the same `segmentId` as an upsert.
+**Identity correlation.** AssemblyAI labels voices (`speaker A/B/…`) on the mixed stream. The DOM observer records `[t0, t1] → displayName` intervals for the active-speaker indicator. Overlapping the two yields `diarizedSpeaker → displayName` mappings that strengthen with each agreement. Overlapping speech or ambiguous indicators degrade to `unresolved`. Late resolution re-emits the same `segmentId` as an upsert.
 
 ## 6. Event contract (v0)
 
-Zod schemas live in a shared package imported by both the agent and (eventually) the canvas.
+Zod schemas live in a shared package imported by both the agent and (eventually) the canvas. Contract is capture-source-agnostic.
 
 ```ts
 type Participant = {
-  participantId: string;
+  participantId: string;      // stable per meeting (derived from roster identity)
   displayName?: string;
-  csrc?: number;
 };
 
 type TranscriptSegment = {
   segmentId: string;          // stable — re-emission = upsert
   meetingId: string;
-  speaker: Participant | { kind: "unresolved"; csrc?: number };
+  speaker: Participant | { kind: "unresolved"; diarizedLabel?: string };
   text: string;
   startedAt: string;          // ISO 8601
   endedAt: string;
@@ -112,13 +115,13 @@ type AgentEvent =
   | { type: "transcript.segment"; segment: TranscriptSegment };
 ```
 
-Two separate confidence dimensions: transcription accuracy and speaker identity. Downstream consumers must not collapse "possibly Diego" into "Diego said X".
+Two separate confidence dimensions: transcription accuracy and speaker identity. Downstream consumers must not collapse "possibly Diego" into "Diego said X". With this capture method, `resolved` is reserved for future sources (Media API); the bot emits at best `inferred`.
 
 ## 7. Testing API (Worker routes)
 
 ```text
-POST /meetings/:id/start        { meetCode }         start a session
-POST /meetings/:id/stop                              stop it
+POST /meetings/:id/start        { meetUrl }          start a session (bot requests to join)
+POST /meetings/:id/stop                              bot leaves, session ends
 GET  /meetings/:id                                   session state + participants
 GET  /meetings/:id/transcript?since=<cursor>         paginated segments (from DO SQLite)
 GET  /meetings/:id/stream                            SSE live feed (Portal fallback)
@@ -126,32 +129,42 @@ GET  /meetings/:id/stream                            SSE live feed (Portal fallb
 
 Auth: single shared bearer token (hackathon-grade).
 
+Session states: `starting → waiting_admission → in_meeting → ended(reason)`. `waiting_admission` times out (default 3 min) → `ended("admission_timeout")`.
+
 ## 8. Error handling
 
 | Failure | Behavior |
 |---|---|
-| Chromium crash / WebRTC drop | DO restarts container, reconnects, emits `session.started {resumed: true}`. Transcript intact in SQLite. |
+| Host never admits the bot | `ended("admission_timeout")` after 3 min |
+| Bot ejected / meeting ends | `session.ended` with reason (`removed`, `meeting_ended`) |
+| Chromium crash | DO restarts container; bot re-requests admission; emits `session.started {resumed: true}`. Transcript intact in SQLite |
 | AssemblyAI WS drop | Reconnect with backoff; ~10 s in-memory audio buffer; longer loss → next segment marked `gap: true` |
-| CSRC with no metadata yet | Emit `unresolved`; upsert the segment when identity arrives |
-| Meet refuses connection (`DISABLED_BY_ADMIN`, `NO_ACTIVE_CONFERENCE`, …) | `session.ended` with `reason` set to the error code |
+| Meet UI change breaks a selector | `meet-ui-adapter` throws typed error → identity degrades to `unresolved` (transcription continues); roster loss logged loudly |
+| Ambiguous/overlapping speakers | Segment emitted as `unresolved` |
 | Portal publish fails | Log + continue; SSE endpoint remains the reliable feed |
+
+Graceful degradation principle: **audio → transcript must survive even if all DOM scraping breaks.** Identity is best-effort on top.
 
 ## 9. Testing strategy
 
-- **Unit (Vitest):** CSRC→participant mapper, segment reducer/upsert logic, AssemblyAI event parser (recorded fixtures).
+- **Unit (Vitest):** identity correlator (diarization intervals × active-speaker intervals, fixtures), segment reducer/upsert, AssemblyAI event parser (recorded fixtures).
 - **Integration:** container pipeline fed a WAV fixture through the STT bridge — no Meet dependency.
-- **E2E (manual):** real meeting with Preview-enrolled accounts; checklist: join, consent, ≥2 speakers correctly attributed, reconnect mid-meeting, stop.
+- **Selector smoke test:** headless Chromium against a real Meet lobby page; asserts `meet-ui-adapter` selectors still match (run manually / on demand, since it needs a live meeting).
+- **E2E (manual):** real meeting, checklist: bot requests admission, admitted, ≥2 speakers attributed `inferred`, reconnect mid-meeting, stop, replay via API.
 
 ## 10. Accepted risks / open items
 
-1. **Developer Preview enrollment** (GCP project + every participant) — administrative blocker for any real demo; start the enrollment immediately.
-2. **OAuth in headless Chromium:** the reference client uses the implicit flow interactively; we will inject a server-side-obtained access token (refresh-token flow) into the page. Mechanics resolved during implementation.
-3. **Portal publish from Node:** SDK targets browsers; Node ≥ 22 has native WebSocket so it may work as-is. If not, canvas consumes our SSE endpoint until Portal exposes a server SDK.
-4. **Audio bridge performance:** shuttling PCM from the page to Node via CDP may need tuning (chunk size, transfer encoding). Fallback: capture via Chromium's `--use-file-for-fake-audio-capture` alternatives or move to the C++ client.
+1. **Meet UI fragility:** selectors break without notice. Mitigation: all selectors in `meet-ui-adapter`, typed failures, graceful degradation to transcript-only.
+2. **ToS gray area:** Google does not sanction scraper bots; this is the same mechanism used by mainstream notetakers. Accepted for hackathon use.
+3. **Manual admission:** host must admit the bot every meeting. Accepted UX cost.
+4. **Headless tab-audio capture mechanics:** requires Chromium flags (e.g. auto-accept tab capture) or an extension loaded via Playwright; exact mechanism resolved during implementation.
+5. **Identity ceiling:** temporal correlation can misattribute during rapid exchanges or overlap; the contract exposes this honestly via `identityConfidence`.
+6. **Portal publish from Node:** SDK targets browsers; Node ≥ 22 native WebSocket may work as-is. If not, canvas consumes our SSE endpoint until Portal exposes a server SDK.
+7. **Future migration:** at Media API GA (or once a Workspace account exists), swap `src/meet/` + `src/identity/` for the CSRC-based implementation; contract and everything downstream unchanged.
 
 ## 11. Out of scope (this phase)
 
 - AI note/diagram generation (phase 2: Gemini structured output).
 - Canvas implementation and Portal channel consumption (teammate).
-- Video/screen-share analysis, per-person agents, agent speaking in the meeting.
-- Meetings outside the Developer Preview cohort.
+- Video/screen-share analysis, per-person agents, bot speaking in the meeting.
+- Recording/storing raw audio (transcript only).
