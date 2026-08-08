@@ -407,17 +407,18 @@ The UI must not call repositories, Elysia mutations, or Portal sends directly. P
 
 All event content is validated with a Zod discriminated union before local application.
 
-Common operation fields:
+Common operation content fields:
 
 ```ts
 {
     eventId: string;
     projectId: string;
     occurredAt: string;
-    type: string;
-    payload: unknown;
+    kind: string;
 }
 ```
+
+The task-specific S0 contract defines the exact `kind` variants and the normalized Portal message envelope. Portal's own `message.type` remains the unsuffixed conceptual event name, while content `kind` distinguishes preview from final variants.
 
 `actorId` is never trusted from event content. A receiving client takes the actor from Portal's verified `message.sender.id`. Mutation APIs take the actor from the Better Auth session. `createdBy` is assigned from that verified identity rather than accepted from the request body.
 
