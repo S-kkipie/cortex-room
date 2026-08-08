@@ -1,0 +1,24 @@
+{
+    "name": "@cortex/meet-agent",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@portalsdk/core": "^0.1.0",
+        "assemblyai": "^4.9.0",
+        "nanoid": "^5.1.16",
+        "playwright": "^1.49.0",
+        "zod": "^4.4.3"
+    },
+    "devDependencies": {
+        "@cloudflare/workers-types": "^4.20250101.0",
+        "typescript": "^5",
+        "vitest": "^3.2.4",
+        "wrangler": "^3.95.0"
+    }
+}
