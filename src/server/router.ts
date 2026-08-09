@@ -6,6 +6,7 @@ import { getLogger } from "@logtape/logtape";
 import { Elysia } from "elysia";
 import { z } from "zod";
 import { ServerConfig } from "@/config/server-config";
+import { canvasRouter } from "@/core/canvas/server/api/router";
 import { projectRouter } from "@/core/project/server/api/router";
 import { auth } from "./auth/auth";
 import type { APIResponse } from "./common/responses";
@@ -68,7 +69,8 @@ const app = new Elysia({ prefix: "/api/v1" })
             status: isValidation ? 400 : 500,
         } satisfies APIResponse;
     })
-    .use(projectRouter);
+    .use(projectRouter)
+    .use(canvasRouter);
 
 export default app;
 export type AppRouter = typeof app;

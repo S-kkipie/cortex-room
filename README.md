@@ -58,8 +58,9 @@ Regenerate + apply migrations: `pnpm db:generate && pnpm db:migrate`.
 
 ## Scripts
 
-`pnpm dev | build | start` · `pnpm test` · `pnpm check` (Biome) ·
-`pnpm typecheck` · `pnpm db:generate | db:migrate | db:studio`.
+`pnpm dev | build | start` · `pnpm test` · `pnpm test:canvas:integration`
+(requires `CANVAS_TEST_DATABASE_URL`) · `pnpm check` (Biome) · `pnpm typecheck` ·
+`pnpm db:generate | db:migrate | db:studio`.
 
 ## Known notes
 
