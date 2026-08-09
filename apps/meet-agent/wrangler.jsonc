@@ -1,0 +1,13 @@
+{
+    "name": "cortex-meet-agent",
+    "main": "worker/worker.ts",
+    "compatibility_date": "2026-01-01",
+    "durable_objects": {
+        "bindings": [{ "name": "MEETING_AGENT", "class_name": "MeetingAgent" }],
+    },
+    "migrations": [{ "tag": "v1", "new_classes": ["MeetingAgent"] }],
+    "vars": {
+        "RECALL_REGION": "us-west-2",
+        "PUBLIC_BASE_URL": "https://cortex-meet-agent.example.workers.dev",
+    },
+}
