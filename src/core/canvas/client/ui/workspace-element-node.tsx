@@ -2,6 +2,7 @@
 
 import { type NodeProps, NodeResizer } from "@xyflow/react";
 import { useCanvasController } from "@/core/canvas/client/controller/canvas-controller-context";
+import type { CanvasPreview } from "@/core/canvas/client/controller/canvas-preview";
 import {
     getElementDefaults,
     parseCardContent,
@@ -10,9 +11,16 @@ import type { WorkspaceElementNode as WorkspaceElementNodeModel } from "@/core/c
 import type { WorkspaceElement } from "@/core/canvas/domain/types";
 import { WorkspaceElementEditor } from "./workspace-element-editor";
 
-function ElementContent({ element }: { element: WorkspaceElement }) {
+function ElementContent({
+    element,
+    preview,
+}: {
+    element: WorkspaceElement;
+    preview?: CanvasPreview;
+}) {
+    const content = preview?.content ?? element.content;
     if (element.type === "CARD") {
-        const { title, description } = parseCardContent(element.content);
+        const { title, description } = parseCardContent(content);
 
         return (
             <>
@@ -36,7 +44,7 @@ function ElementContent({ element }: { element: WorkspaceElement }) {
                     : "whitespace-pre-wrap text-sm"
             }
         >
-            {element.content || "Double-click to edit"}
+            {content || "Double-click to edit"}
         </p>
     );
 }
@@ -52,7 +60,7 @@ export function WorkspaceElementNode({
         setResizePreview,
         clearPreview,
     } = useCanvasController();
-    const { element } = data;
+    const { element, preview } = data;
     const defaults = getElementDefaults(element.type);
     const isEditing = editingElementId === element.id;
 
@@ -101,7 +109,7 @@ export function WorkspaceElementNode({
             {isEditing ? (
                 <WorkspaceElementEditor element={element} />
             ) : (
-                <ElementContent element={element} />
+                <ElementContent element={element} preview={preview} />
             )}
         </div>
     );

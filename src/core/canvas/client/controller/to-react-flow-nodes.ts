@@ -1,6 +1,6 @@
 import type { Node } from "@xyflow/react";
 import type { WorkspaceElement } from "@/core/canvas/domain/types";
-import type { CanvasPreview } from "./canvas-controller-context";
+import type { CanvasPreview } from "./canvas-preview";
 
 export type WorkspaceElementNodeData = {
     element: WorkspaceElement;

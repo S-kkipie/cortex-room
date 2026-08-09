@@ -48,6 +48,7 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 afterEach(() => {
     contextMock.textDrafts = {};
+    vi.useRealTimers();
     vi.clearAllMocks();
     document.body.replaceChildren();
 });
@@ -105,6 +106,20 @@ describe("WorkspaceElementEditor", () => {
         });
 
         expect(contextMock.confirmEditing).toHaveBeenCalledTimes(1);
+        view.unmount();
+    });
+
+    it("confirms a changed draft after the idle interval", () => {
+        vi.useFakeTimers();
+        contextMock.textDrafts[element.id] = "Draft";
+        contextMock.confirmEditing.mockResolvedValue(undefined);
+        const view = render(createElement(WorkspaceElementEditor, { element }));
+
+        act(() => vi.advanceTimersByTime(499));
+        expect(contextMock.confirmEditing).not.toHaveBeenCalled();
+
+        act(() => vi.advanceTimersByTime(1));
+        expect(contextMock.confirmEditing).toHaveBeenCalledWith(element.id);
         view.unmount();
     });
 });

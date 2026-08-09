@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useCanvasController } from "@/core/canvas/client/controller/canvas-controller-context";
+import { TEXT_COMMIT_IDLE_MS } from "@/core/canvas/domain/schemas";
 import type { WorkspaceElement } from "@/core/canvas/domain/types";
 import { Textarea } from "@/frontend/components/ui/textarea";
 
@@ -14,10 +15,22 @@ export function WorkspaceElementEditor({
         useCanvasController();
     const skipNextBlur = useRef(false);
     const value = textDrafts[element.id] ?? element.content;
-    const confirm = () =>
-        Promise.resolve(confirmEditing(element.id)).finally(() => {
-            skipNextBlur.current = false;
-        });
+    const confirm = useCallback(
+        () =>
+            Promise.resolve(confirmEditing(element.id)).finally(() => {
+                skipNextBlur.current = false;
+            }),
+        [confirmEditing, element.id],
+    );
+
+    useEffect(() => {
+        if (value === element.content) return;
+        const timer = setTimeout(() => {
+            void confirm().catch(() => undefined);
+        }, TEXT_COMMIT_IDLE_MS);
+
+        return () => clearTimeout(timer);
+    }, [confirm, element.content, value]);
 
     return (
         <Textarea

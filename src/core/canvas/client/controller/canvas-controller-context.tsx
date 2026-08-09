@@ -5,6 +5,8 @@ import {
     createContext,
     useCallback,
     useContext,
+    useEffect,
+    useMemo,
     useRef,
     useState,
 } from "react";
@@ -19,6 +21,7 @@ import type {
     CanvasSnapshot,
 } from "@/core/canvas/domain/types";
 import type { CanvasActions, CanvasSelectionPort } from "./canvas-controller";
+import type { CanvasPreview, CanvasPreviewPort } from "./canvas-preview";
 
 export type CanvasTool =
     | "select"
@@ -28,13 +31,6 @@ export type CanvasTool =
     | "CARD"
     | "HEADING"
     | "delete";
-
-export type CanvasPreview = {
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-};
 
 export type CanvasControllerValue = {
     projectId: string;
@@ -87,6 +83,7 @@ export function CanvasControllerProvider({
         () => new Map(),
     );
     const [fitViewHasRun, setFitViewHasRun] = useState(false);
+    const pendingTextCommitsRef = useRef(new Set<string>());
     const selectedElementIdsRef = useRef(selectedElementIds);
     const selectionRef = useRef<CanvasSelectionPort>({
         read: () => selectedElementIdsRef.current,
@@ -103,53 +100,107 @@ export function CanvasControllerProvider({
             setSelectedElementIds(next);
         },
     });
+    const previewPort = useMemo<CanvasPreviewPort>(
+        () => ({
+            set: (elementId, preview) => {
+                setPreviews((current) => {
+                    const next = new Map(current);
+                    next.set(elementId, {
+                        ...current.get(elementId),
+                        ...preview,
+                    });
+                    return next;
+                });
+            },
+            clear: (elementId) => {
+                setPreviews((current) => {
+                    if (!current.has(elementId)) return current;
+                    const next = new Map(current);
+                    next.delete(elementId);
+                    return next;
+                });
+            },
+        }),
+        [],
+    );
     const canvas = useCanvas();
     const portal = useCanvasPortal();
+    const realtime = useMemo(
+        () => ({
+            publishPersistent: portal.sendPersistent,
+            publishEphemeral: portal.sendEphemeral,
+        }),
+        [portal.sendEphemeral, portal.sendPersistent],
+    );
     const { snapshotQuery, actions } = canvas.useController({
         projectId,
         userId,
         selection: selectionRef.current,
+        previews: previewPort,
+        realtime,
         enabled: portal.historyReady,
         onError: () => toast.error("Unable to save canvas change"),
     });
 
-    const setPreview = useCallback(
-        (elementId: string, preview: CanvasPreview) => {
-            setPreviews((current) => {
-                const next = new Map(current);
-                next.set(elementId, { ...current.get(elementId), ...preview });
-                return next;
-            });
+    useEffect(() => {
+        if (!snapshotQuery.data?.response) return;
+        for (const message of portal.messages) {
+            actions.applyRemoteMessage(message);
+        }
+    }, [actions, portal.messages, snapshotQuery.data?.response]);
+
+    useEffect(() => () => actions.cancelAllPreviews(), [actions]);
+
+    const setPreview = previewPort.set;
+
+    const clearPreview = useCallback(
+        (elementId: string) => {
+            actions.cancelPreviews(elementId);
+            previewPort.clear(elementId);
         },
-        [],
+        [actions, previewPort],
     );
 
-    const clearPreview = useCallback((elementId: string) => {
-        setPreviews((current) => {
-            if (!current.has(elementId)) return current;
-            const next = new Map(current);
-            next.delete(elementId);
-            return next;
-        });
-    }, []);
+    const setMovePreview = useCallback(
+        (elementId: string, preview: { x: number; y: number }) => {
+            setPreview(elementId, preview);
+            actions.publishMovePreview(elementId, preview);
+        },
+        [actions, setPreview],
+    );
+
+    const setResizePreview = useCallback(
+        (elementId: string, preview: { width: number; height: number }) => {
+            setPreview(elementId, preview);
+            actions.publishResizePreview(elementId, preview);
+        },
+        [actions, setPreview],
+    );
 
     const markFitViewComplete = useCallback(() => setFitViewHasRun(true), []);
 
-    const beginEditing = (elementId: string) => {
-        const element = actions.getElement(elementId);
-        if (!element) return;
-        setEditingElementId(elementId);
-        setTextDrafts((current) => ({
-            ...current,
-            [elementId]: element.content,
-        }));
-    };
+    const beginEditing = useCallback(
+        (elementId: string) => {
+            const element = actions.getElement(elementId);
+            if (!element) return;
+            setEditingElementId(elementId);
+            setTextDrafts((current) => ({
+                ...current,
+                [elementId]: element.content,
+            }));
+        },
+        [actions],
+    );
 
-    const setTextDraft = (elementId: string, content: string) => {
-        setTextDrafts((current) => ({ ...current, [elementId]: content }));
-    };
+    const setTextDraft = useCallback(
+        (elementId: string, content: string) => {
+            setTextDrafts((current) => ({ ...current, [elementId]: content }));
+            actions.publishTextPreview(elementId, content);
+        },
+        [actions],
+    );
 
-    const clearEditing = (elementId: string) => {
+    const clearEditing = useCallback((elementId: string) => {
         setEditingElementId((current) =>
             current === elementId ? null : current,
         );
@@ -159,28 +210,42 @@ export function CanvasControllerProvider({
             delete next[elementId];
             return next;
         });
-    };
+    }, []);
 
-    const confirmEditing = async (elementId: string) => {
-        const element = actions.getElement(elementId);
-        const draft = textDrafts[elementId];
-        if (!element || draft === undefined) return undefined;
+    const confirmEditing = useCallback(
+        async (elementId: string) => {
+            if (pendingTextCommitsRef.current.has(elementId)) return undefined;
+            const element = actions.getElement(elementId);
+            const draft = textDrafts[elementId];
+            if (!element || draft === undefined) return undefined;
 
-        if (draft === element.content) {
+            actions.cancelPreviews(elementId);
+            if (draft === element.content) {
+                clearEditing(elementId);
+                return undefined;
+            }
+
+            pendingTextCommitsRef.current.add(elementId);
+            try {
+                const result = await actions.updateElement(elementId, {
+                    content: draft,
+                });
+                clearEditing(elementId);
+                return result;
+            } finally {
+                pendingTextCommitsRef.current.delete(elementId);
+            }
+        },
+        [actions, clearEditing, textDrafts],
+    );
+
+    const cancelEditing = useCallback(
+        (elementId: string) => {
+            actions.cancelPreviews(elementId);
             clearEditing(elementId);
-            return undefined;
-        }
-
-        const result = await actions.updateElement(elementId, {
-            content: draft,
-        });
-        clearEditing(elementId);
-        return result;
-    };
-
-    const cancelEditing = (elementId: string) => {
-        clearEditing(elementId);
-    };
+        },
+        [actions, clearEditing],
+    );
 
     const value: CanvasControllerValue = {
         projectId,
@@ -201,8 +266,8 @@ export function CanvasControllerProvider({
         editingElementId,
         textDrafts,
         previews,
-        setMovePreview: setPreview,
-        setResizePreview: setPreview,
+        setMovePreview,
+        setResizePreview,
         clearPreview,
         getPreview: (elementId) => previews.get(elementId),
         beginEditing,

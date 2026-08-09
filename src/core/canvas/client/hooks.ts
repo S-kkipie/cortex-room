@@ -17,6 +17,8 @@ import {
     type CanvasTransport,
     createCanvasActions,
 } from "./controller/canvas-controller";
+import type { CanvasPreviewPort } from "./controller/canvas-preview";
+import type { CanvasRealtimePort } from "./portal/canvas-portal-events";
 
 type MutationEnvelope = { response: CanvasMutationResult };
 
@@ -24,6 +26,8 @@ type ControllerOptions = {
     projectId: string;
     userId: string;
     selection: CanvasSelectionPort;
+    previews?: CanvasPreviewPort;
+    realtime?: CanvasRealtimePort;
     enabled?: boolean;
     onError?: (error: unknown) => void;
 };
@@ -41,6 +45,8 @@ export const useCanvas = () => {
         projectId,
         userId,
         selection,
+        previews,
+        realtime,
         enabled = true,
         onError,
     }: ControllerOptions) => {
@@ -139,7 +145,9 @@ export const useCanvas = () => {
                     userId,
                     state,
                     selection,
+                    previews,
                     transport,
+                    realtime,
                     onError,
                 }),
             };

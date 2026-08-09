@@ -67,10 +67,13 @@ function render(elementToRender: ReactElement) {
     };
 }
 
-function nodeProps(selected: boolean): NodeProps<WorkspaceElementNode> {
+function nodeProps(
+    selected: boolean,
+    preview?: { content?: string },
+): NodeProps<WorkspaceElementNode> {
     return {
         id: element.id,
-        data: { element },
+        data: { element, preview },
         selected,
         dragging: false,
         type: "workspaceElement",
@@ -131,6 +134,20 @@ describe("WorkspaceElementNode", () => {
         expect(
             view.container.querySelector('[data-testid="node-resizer"]'),
         ).toBeNull();
+        view.unmount();
+    });
+
+    it("renders remote text previews without changing the persisted element", () => {
+        const view = render(
+            createElement(
+                WorkspaceElementNodeComponent,
+                nodeProps(true, { content: "Remote title\nRemote detail" }),
+            ),
+        );
+
+        expect(view.container.textContent).toContain("Remote title");
+        expect(view.container.textContent).toContain("Remote detail");
+        expect(view.container.textContent).not.toContain("Title");
         view.unmount();
     });
 });

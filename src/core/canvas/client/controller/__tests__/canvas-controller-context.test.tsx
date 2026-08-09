@@ -32,6 +32,12 @@ const controllerMock = vi.hoisted(() => ({
     moveElement: vi.fn(),
     resizeElement: vi.fn(),
     deleteElement: vi.fn(),
+    applyRemoteMessage: vi.fn(),
+    publishMovePreview: vi.fn(),
+    publishResizePreview: vi.fn(),
+    publishTextPreview: vi.fn(),
+    cancelPreviews: vi.fn(),
+    cancelAllPreviews: vi.fn(),
     selectElements: vi.fn(),
     getElement: vi.fn(),
     getElements: vi.fn(),
@@ -77,6 +83,12 @@ vi.mock("@/core/canvas/client/hooks", () => ({
                     moveElement: controllerMock.moveElement,
                     resizeElement: controllerMock.resizeElement,
                     deleteElement: controllerMock.deleteElement,
+                    applyRemoteMessage: controllerMock.applyRemoteMessage,
+                    publishMovePreview: controllerMock.publishMovePreview,
+                    publishResizePreview: controllerMock.publishResizePreview,
+                    publishTextPreview: controllerMock.publishTextPreview,
+                    cancelPreviews: controllerMock.cancelPreviews,
+                    cancelAllPreviews: controllerMock.cancelAllPreviews,
                     selectElements: controllerMock.selectElements,
                     getElement: controllerMock.getElement,
                     getElements: controllerMock.getElements,
@@ -92,6 +104,7 @@ vi.mock("@/core/canvas/client/portal/canvas-portal-provider", () => ({
         configured: false,
         status: "unavailable",
         historyReady: true,
+        messages: [],
     }),
 }));
 
@@ -197,6 +210,10 @@ describe("CanvasControllerProvider", () => {
         expect(controllerMock.updateElement).toHaveBeenCalledWith(elementId, {
             content: "Updated",
         });
+        expect(controllerMock.publishTextPreview).toHaveBeenCalledWith(
+            elementId,
+            "Updated",
+        );
         expect(
             view.container.querySelector("[data-testid=state]")?.textContent,
         ).toBe("none:80");
@@ -233,6 +250,43 @@ describe("CanvasControllerProvider", () => {
         act(() => selectionPortMock.current?.write([elementId]));
 
         expect(probeRenderCount).toBe(renderCountAfterFirstWrite);
+        view.unmount();
+    });
+
+    it("does not persist the same text draft twice while a commit is pending", async () => {
+        let resolveUpdate: ((result: CanvasMutationResult) => void) | undefined;
+        const view = render(
+            createElement(
+                CanvasControllerProvider,
+                { projectId: element.projectId, userId: "user-1" },
+                createElement(Probe),
+            ),
+        );
+        controllerMock.updateElement.mockImplementationOnce(
+            () =>
+                new Promise<CanvasMutationResult>((resolve) => {
+                    resolveUpdate = resolve;
+                }),
+        );
+
+        act(() => {
+            view.container.querySelector<HTMLButtonElement>("button")?.click();
+            view.container
+                .querySelectorAll<HTMLButtonElement>("button")[1]
+                ?.click();
+        });
+        act(() => {
+            view.container
+                .querySelectorAll<HTMLButtonElement>("button")[2]
+                ?.click();
+            view.container
+                .querySelectorAll<HTMLButtonElement>("button")[2]
+                ?.click();
+        });
+
+        expect(controllerMock.updateElement).toHaveBeenCalledOnce();
+        resolveUpdate?.({ applied: true, record: element });
+        await act(async () => undefined);
         view.unmount();
     });
 });

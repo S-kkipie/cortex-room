@@ -1,16 +1,21 @@
 import { compareOperationVersions } from "@/core/canvas/domain/operation-version";
 import {
     canvasMutationResultSchema,
+    canvasPortalMessageSchema,
     createElementCommandSchema,
     deleteElementCommandSchema,
+    ELEMENT_PREVIEW_THROTTLE_MS,
     elementTombstoneSchema,
     moveElementCommandSchema,
     resizeElementCommandSchema,
+    TEXT_PREVIEW_DEBOUNCE_MS,
     updateElementCommandSchema,
     workspaceElementSchema,
 } from "@/core/canvas/domain/schemas";
 import type {
+    CanvasCommand,
     CanvasMutationResult,
+    CanvasPortalMessage,
     CanvasSnapshot,
     CreateElementCommand,
     DeleteElementCommand,
@@ -21,6 +26,14 @@ import type {
     UpdateElementCommand,
     WorkspaceElement,
 } from "@/core/canvas/domain/types";
+import {
+    buildFinalCanvasMessage,
+    buildMovePreviewMessage,
+    buildResizePreviewMessage,
+    buildTextPreviewMessage,
+    type CanvasRealtimePort,
+} from "../portal/canvas-portal-events";
+import type { CanvasPreviewPort } from "./canvas-preview";
 import {
     isCanvasTombstone,
     reconcileCanvasRecord,
@@ -69,6 +82,15 @@ export type CanvasActions = {
         dimensions: ResizeElementInput,
     ): Promise<CanvasMutationResult>;
     deleteElement(elementId: string): Promise<CanvasMutationResult>;
+    applyRemoteMessage(message: CanvasPortalMessage): void;
+    publishMovePreview(elementId: string, position: MoveElementInput): void;
+    publishResizePreview(
+        elementId: string,
+        dimensions: ResizeElementInput,
+    ): void;
+    publishTextPreview(elementId: string, content: string): void;
+    cancelPreviews(elementId: string): void;
+    cancelAllPreviews(): void;
     selectElements(elementIds: string[]): void;
     getElement(elementId: string): WorkspaceElement | undefined;
     getElements(): CanvasSnapshot["elements"];
@@ -81,6 +103,8 @@ type CanvasControllerDependencies = {
     state: CanvasSnapshotPort;
     selection: CanvasSelectionPort;
     transport: CanvasTransport;
+    previews?: CanvasPreviewPort;
+    realtime?: CanvasRealtimePort;
     idFactory?: () => string;
     now?: () => string;
     onError?: (error: unknown) => void;
@@ -137,11 +161,125 @@ export function createCanvasActions({
     state,
     selection,
     transport,
+    previews,
+    realtime,
     idFactory = () => crypto.randomUUID(),
     now = () => new Date().toISOString(),
     onError,
 }: CanvasControllerDependencies): CanvasActions {
     const pendingOperations = new Map<string, PendingOperation>();
+    const recentEventIds = new Set<string>();
+    const throttledPreviewStates = new Map<
+        string,
+        {
+            lastSentAt: number;
+            timer?: ReturnType<typeof setTimeout>;
+            pending?: () => CanvasPortalMessage;
+        }
+    >();
+    const textPreviewTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    const maxRecentEventIds = 1_000;
+
+    const rememberEventId = (eventId: string): boolean => {
+        if (recentEventIds.has(eventId)) return false;
+        recentEventIds.add(eventId);
+        if (recentEventIds.size > maxRecentEventIds) {
+            const oldest = recentEventIds.values().next().value;
+            if (oldest) recentEventIds.delete(oldest);
+        }
+        return true;
+    };
+
+    const publishFinal = (
+        command: CanvasCommand,
+        result: CanvasMutationResult,
+    ) => {
+        const message = buildFinalCanvasMessage(command, result, userId);
+        if (!message) return;
+
+        rememberEventId(message.content.eventId);
+        void realtime?.publishPersistent(message).catch(() => undefined);
+    };
+
+    const publishPreview = (build: () => CanvasPortalMessage) => {
+        void realtime?.publishEphemeral(build()).catch(() => undefined);
+    };
+
+    const scheduleThrottledPreview = (
+        key: string,
+        build: () => CanvasPortalMessage,
+    ) => {
+        if (!realtime) return;
+
+        const current = throttledPreviewStates.get(key) ?? {
+            lastSentAt: Number.NEGATIVE_INFINITY,
+        };
+        const elapsed = Date.now() - current.lastSentAt;
+        if (!current.timer && elapsed >= ELEMENT_PREVIEW_THROTTLE_MS) {
+            current.lastSentAt = Date.now();
+            publishPreview(build);
+            throttledPreviewStates.set(key, current);
+            return;
+        }
+
+        current.pending = build;
+        if (current.timer) {
+            throttledPreviewStates.set(key, current);
+            return;
+        }
+
+        current.timer = setTimeout(
+            () => {
+                current.timer = undefined;
+                const pending = current.pending;
+                current.pending = undefined;
+                if (pending) {
+                    current.lastSentAt = Date.now();
+                    publishPreview(pending);
+                }
+                throttledPreviewStates.set(key, current);
+            },
+            Math.max(0, ELEMENT_PREVIEW_THROTTLE_MS - elapsed),
+        );
+        throttledPreviewStates.set(key, current);
+    };
+
+    const scheduleTextPreview = (
+        elementId: string,
+        build: () => CanvasPortalMessage,
+    ) => {
+        if (!realtime) return;
+        const previous = textPreviewTimers.get(elementId);
+        if (previous) clearTimeout(previous);
+        textPreviewTimers.set(
+            elementId,
+            setTimeout(() => {
+                textPreviewTimers.delete(elementId);
+                publishPreview(build);
+            }, TEXT_PREVIEW_DEBOUNCE_MS),
+        );
+    };
+
+    const cancelPreviews = (elementId: string) => {
+        for (const [key, state] of throttledPreviewStates) {
+            if (!key.endsWith(`:${elementId}`)) continue;
+            if (state.timer) clearTimeout(state.timer);
+            throttledPreviewStates.delete(key);
+        }
+
+        const textTimer = textPreviewTimers.get(elementId);
+        if (textTimer) clearTimeout(textTimer);
+        textPreviewTimers.delete(elementId);
+    };
+
+    const cancelAllPreviews = () => {
+        for (const state of throttledPreviewStates.values()) {
+            if (state.timer) clearTimeout(state.timer);
+        }
+        for (const timer of textPreviewTimers.values()) clearTimeout(timer);
+        throttledPreviewStates.clear();
+        textPreviewTimers.clear();
+    };
 
     const getSnapshot = () => {
         const snapshot = state.read();
@@ -190,6 +328,9 @@ export function createCanvasActions({
                             .read()
                             .filter((selectedId) => selectedId !== elementId),
                     );
+                }
+                if (parsedResult.applied) {
+                    publishFinal(command, parsedResult);
                 }
                 pendingOperations.delete(command.eventId);
                 return parsedResult;
@@ -420,12 +561,119 @@ export function createCanvasActions({
         );
     };
 
+    const applyRemoteMessage = (message: CanvasPortalMessage) => {
+        const parsed = canvasPortalMessageSchema.safeParse(message);
+        if (!parsed.success) return;
+
+        const event = parsed.data.content;
+        if (event.projectId !== projectId) return;
+
+        if (parsed.data.ephemeral) {
+            if (!rememberEventId(event.eventId)) return;
+            if (event.kind === "participant.cursor.moved") return;
+            if (event.kind === "participant.selection.changed") return;
+            if (event.kind === "workspace.element.moved.preview") {
+                previews?.set(event.elementId, { x: event.x, y: event.y });
+            } else if (event.kind === "workspace.element.resized.preview") {
+                previews?.set(event.elementId, {
+                    width: event.width,
+                    height: event.height,
+                });
+            } else if (event.kind === "workspace.element.updated.preview") {
+                previews?.set(event.elementId, { content: event.content });
+            }
+            return;
+        }
+
+        const currentSnapshot = state.read();
+        if (!currentSnapshot || !rememberEventId(event.eventId)) return;
+
+        const record =
+            "element" in event
+                ? event.element
+                : "tombstone" in event
+                  ? event.tombstone
+                  : undefined;
+        if (!record) return;
+        const nextSnapshot = reconcileCanvasRecord(currentSnapshot, record);
+        if (nextSnapshot === currentSnapshot) return;
+        state.write(() => nextSnapshot);
+
+        if (isCanvasTombstone(record)) {
+            previews?.clear(record.id);
+            selection.write(
+                selection
+                    .read()
+                    .filter((selectedId) => selectedId !== record.id),
+            );
+        } else {
+            previews?.clear(record.id);
+        }
+    };
+
+    const publishMovePreview = (
+        elementId: string,
+        position: MoveElementInput,
+    ) => {
+        scheduleThrottledPreview(`move:${elementId}`, () =>
+            buildMovePreviewMessage(
+                {
+                    eventId: idFactory(),
+                    projectId,
+                    occurredAt: now(),
+                    senderId: userId,
+                },
+                position,
+                elementId,
+            ),
+        );
+    };
+
+    const publishResizePreview = (
+        elementId: string,
+        dimensions: ResizeElementInput,
+    ) => {
+        scheduleThrottledPreview(`resize:${elementId}`, () =>
+            buildResizePreviewMessage(
+                {
+                    eventId: idFactory(),
+                    projectId,
+                    occurredAt: now(),
+                    senderId: userId,
+                },
+                dimensions,
+                elementId,
+            ),
+        );
+    };
+
+    const publishTextPreview = (elementId: string, content: string) => {
+        scheduleTextPreview(elementId, () =>
+            buildTextPreviewMessage(
+                {
+                    eventId: idFactory(),
+                    projectId,
+                    occurredAt: now(),
+                    senderId: userId,
+                },
+                elementId,
+                content,
+            ),
+        );
+    };
+
     return {
         createElement,
         updateElement,
         moveElement,
         resizeElement,
         deleteElement,
+        applyRemoteMessage,
+        publishMovePreview,
+        publishResizePreview,
+        publishTextPreview,
+        cancelPreviews,
+        cancelAllPreviews,
         selectElements: (elementIds: string[]) =>
             selection.write([...elementIds]),
         getElement: (elementId: string) =>
