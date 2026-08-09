@@ -17,7 +17,7 @@ Google Meet link. Recall billing is active per meeting-minute.
    plus `speaker.active` events on speech start/stop.
 5. Start a bot with `canvasProjectId` in the body, and speak a clear action item. Within ~30s,
    confirm a `workspace.element.created` (`created.final`) STICKY appears on Portal channel
-   `canvas-{projectId}`. Then verify a start without `canvasProjectId` still transcribes and
+   `room-{projectId}`. Then verify a start without `canvasProjectId` still transcribes and
    creates no canvas elements.
 6. Roster: `curl "$URL/meetings/demo" -H "authorization: Bearer $AUTH_TOKEN"` lists participants.
 7. Stop: `curl -XPOST "$URL/meetings/demo/stop" -H "authorization: Bearer $AUTH_TOKEN"`.

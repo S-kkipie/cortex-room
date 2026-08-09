@@ -1,4 +1,5 @@
 import { Portal } from "@portalsdk/core";
+import { canvasPortalChannelId } from "../../../../../src/core/canvas/domain/portal-channel";
 import { canvasPortalMessageSchema } from "../../../../../src/core/canvas/domain/schemas";
 import type { CanvasPortalMessage } from "../../../../../src/core/canvas/domain/types";
 import type { CanvasNote, NoteCategory } from "./types";
@@ -68,7 +69,7 @@ export function createCanvasPublisher(opts: {
     const ensure = (): ((msg: unknown) => Promise<void>) => {
         if (send) return send;
         const portal = new Portal({ apiKey: opts.apiKey, token: opts.token });
-        const room = portal.channel<CanvasPortalMessage>(`canvas-${opts.projectId}`);
+        const room = portal.channel<CanvasPortalMessage>(canvasPortalChannelId(opts.projectId));
         room.acquire();
         send = async (msg) => {
             await room.send({ content: msg as CanvasPortalMessage });

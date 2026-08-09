@@ -43,4 +43,4 @@ GET  /meetings/:id/stream     → SSE
 POST /webhooks/recall/:id/    ← Recall (HMAC-verified, not bearer)
 ```
 
-`canvasProjectId` is optional on `/start` and, when present, must be a UUID (the canvas wire contract requires it) — a non-UUID value is rejected with 400. If provided, the agent extracts AI notes and publishes them as sticky notes to Portal channel `canvas-{projectId}`. If omitted, behavior stays back-compat as transcription-only. Note that AI note publishing is best-effort and is currently not persisted (Portal-only) until a dedicated canvas-mutation service is in place.
+`canvasProjectId` is optional on `/start` and, when present, must be a UUID (the canvas wire contract requires it) — a non-UUID value is rejected with 400. If provided, the agent extracts AI notes and publishes them as sticky notes to Portal channel `room-{projectId}`. If omitted, behavior stays back-compat as transcription-only. Note that AI note publishing is best-effort and is currently not persisted (Portal-only) until a dedicated canvas-mutation service is in place.
