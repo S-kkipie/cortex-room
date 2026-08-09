@@ -8,6 +8,7 @@ import {
     useReactFlow,
     type Viewport,
 } from "@xyflow/react";
+import { AlertTriangle } from "lucide-react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { useCallback, useEffect, useMemo } from "react";
 import {
@@ -173,7 +174,7 @@ export function CanvasEditor({
     return (
         <div
             aria-label="Canvas editor"
-            className="relative size-full overflow-hidden"
+            className="canvas-editor relative size-full"
             onKeyDown={handleKeyDown}
             role="application"
             onMouseMove={handleCanvasMouseMove}
@@ -183,23 +184,32 @@ export function CanvasEditor({
             {isLoading ? (
                 <div
                     aria-live="polite"
-                    className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/60 text-muted-foreground text-sm backdrop-blur-sm"
+                    className="canvas-overlay canvas-loading-overlay pointer-events-none absolute inset-0 z-20"
                 >
-                    Loading canvas
+                    <div className="canvas-loading-card">
+                        <span className="canvas-loader" aria-hidden="true" />
+                        <span>Loading canvas</span>
+                    </div>
                 </div>
             ) : null}
             {error ? (
-                <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/75 backdrop-blur-sm">
-                    <div
-                        aria-live="assertive"
-                        className="flex max-w-sm flex-col items-center gap-3 rounded-lg border bg-background p-6 text-center shadow-lg"
-                    >
-                        <p className="font-medium">Unable to load canvas</p>
-                        <p className="text-muted-foreground text-sm">
+                <div className="canvas-overlay canvas-error-overlay absolute inset-0 z-20">
+                    <div aria-live="assertive" className="canvas-error-card">
+                        <span className="canvas-error-icon" aria-hidden="true">
+                            <AlertTriangle />
+                        </span>
+                        <p className="canvas-error-title">
+                            Unable to load canvas
+                        </p>
+                        <p className="canvas-error-copy">
                             Try again or return to projects if the problem
                             continues.
                         </p>
-                        <Button type="button" onClick={retry}>
+                        <Button
+                            className="canvas-retry-button"
+                            type="button"
+                            onClick={retry}
+                        >
                             Retry
                         </Button>
                     </div>
@@ -270,7 +280,7 @@ export function CanvasEditor({
                     variant={BackgroundVariant.Dots}
                     gap={24}
                     size={1}
-                    color="var(--muted-foreground)"
+                    color="var(--canvas-grid)"
                     style={{ opacity: 1 }}
                 />
                 <CanvasRemoteCursors participants={remoteParticipants} />

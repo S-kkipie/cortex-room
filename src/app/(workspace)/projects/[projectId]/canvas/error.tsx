@@ -10,19 +10,27 @@ export default function CanvasError({
     reset: () => void;
 }) {
     return (
-        <main className="flex min-h-svh items-center justify-center p-6">
-            <section className="w-full max-w-md space-y-4 text-center">
+        <main
+            className="canvas-shell canvas-error-page flex min-h-svh items-center justify-center p-6"
+            data-canvas-theme="control-room"
+        >
+            <section className="canvas-error-page-card w-full max-w-md space-y-4 text-center">
                 <div className="space-y-2">
-                    <h1 className="font-semibold text-2xl">
+                    <span className="canvas-error-page-mark" aria-hidden="true">
+                        !
+                    </span>
+                    <h1 className="canvas-error-page-title font-semibold text-2xl">
                         We could not load this canvas
                     </h1>
-                    <p className="text-muted-foreground text-sm">
+                    <p className="canvas-error-page-copy text-sm">
                         Something went wrong. Please try again or return to your
                         projects.
                     </p>
                 </div>
-                <div className="flex flex-wrap justify-center gap-2">
-                    <Button onClick={reset}>Retry</Button>
+                <div className="canvas-error-page-actions flex flex-wrap justify-center gap-2">
+                    <Button className="canvas-retry-button" onClick={reset}>
+                        Retry
+                    </Button>
                     <Button asChild variant="outline">
                         <Link href="/projects">Back to projects</Link>
                     </Button>

@@ -164,7 +164,7 @@ describe("NavigableCanvas", () => {
             view.container
                 .querySelector('[data-testid="canvas-background"]')
                 ?.getAttribute("data-color"),
-        ).toBe("var(--muted-foreground)");
+        ).toBe("var(--canvas-grid)");
         expect(
             view.container
                 .querySelector('[data-testid="canvas-background"]')

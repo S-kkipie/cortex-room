@@ -56,10 +56,10 @@ export function CanvasToolbar() {
 
     return (
         <TooltipProvider>
-            <fieldset
-                aria-label="Canvas tools"
-                className="absolute top-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border bg-background/95 p-1 shadow-lg backdrop-blur"
-            >
+            <fieldset aria-label="Canvas tools" className="canvas-toolbar">
+                <span className="canvas-toolbar-label" aria-hidden="true">
+                    Tools
+                </span>
                 {TOOL_BUTTONS.map(({ tool, label, ariaLabel, icon: Icon }) => (
                     <Tooltip key={tool}>
                         <TooltipTrigger asChild>
@@ -69,6 +69,7 @@ export function CanvasToolbar() {
                                     activeTool === tool ? "secondary" : "ghost"
                                 }
                                 size="icon-sm"
+                                className="canvas-tool-button"
                                 aria-label={ariaLabel}
                                 aria-pressed={activeTool === tool}
                                 disabled={disabled}
@@ -83,13 +84,17 @@ export function CanvasToolbar() {
                         </TooltipContent>
                     </Tooltip>
                 ))}
-                <Separator orientation="vertical" className="mx-1 h-6" />
+                <Separator
+                    orientation="vertical"
+                    className="canvas-toolbar-separator"
+                />
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
                             type="button"
                             variant="ghost"
                             size="icon-sm"
+                            className="canvas-tool-button canvas-delete-button"
                             aria-label="Delete selected element"
                             disabled={
                                 disabled || selectedElementIds.length === 0

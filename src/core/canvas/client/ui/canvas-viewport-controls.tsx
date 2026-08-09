@@ -39,7 +39,7 @@ export function CanvasViewportControls({ viewport }: { viewport: Viewport }) {
         <TooltipProvider>
             <fieldset
                 aria-label="Canvas zoom controls"
-                className="absolute right-4 bottom-4 z-10 flex items-center rounded-lg border bg-background/95 p-1 shadow-lg backdrop-blur"
+                className="canvas-viewport-controls"
             >
                 <Tooltip>
                     <TooltipTrigger asChild>
@@ -47,6 +47,7 @@ export function CanvasViewportControls({ viewport }: { viewport: Viewport }) {
                             type="button"
                             variant="ghost"
                             size="icon"
+                            className="canvas-control-button"
                             aria-label="Zoom out"
                             disabled={viewport.zoom <= MIN_ZOOM}
                             onClick={() => zoom("out")}
@@ -58,10 +59,7 @@ export function CanvasViewportControls({ viewport }: { viewport: Viewport }) {
                         Zoom out
                     </TooltipContent>
                 </Tooltip>
-                <span
-                    aria-live="polite"
-                    className="min-w-14 px-2 text-center font-medium text-xs tabular-nums"
-                >
+                <span aria-live="polite" className="canvas-zoom-value">
                     <span className="sr-only">Zoom </span>
                     {percentage}%
                 </span>
@@ -71,6 +69,7 @@ export function CanvasViewportControls({ viewport }: { viewport: Viewport }) {
                             type="button"
                             variant="ghost"
                             size="icon"
+                            className="canvas-control-button"
                             aria-label="Zoom in"
                             disabled={viewport.zoom >= MAX_ZOOM}
                             onClick={() => zoom("in")}
@@ -82,13 +81,17 @@ export function CanvasViewportControls({ viewport }: { viewport: Viewport }) {
                         Zoom in
                     </TooltipContent>
                 </Tooltip>
-                <Separator orientation="vertical" className="mx-1 h-6" />
+                <Separator
+                    orientation="vertical"
+                    className="canvas-controls-separator"
+                />
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
                             type="button"
                             variant="ghost"
                             size="icon"
+                            className="canvas-control-button"
                             aria-label="Reset viewport"
                             onClick={reset}
                         >

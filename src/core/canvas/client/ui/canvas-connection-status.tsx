@@ -43,12 +43,13 @@ export function CanvasConnectionStatus() {
     return (
         <div
             aria-live="polite"
-            className={`absolute right-4 bottom-4 z-10 inline-flex items-center gap-1.5 rounded-full border bg-background/90 px-2.5 py-1 text-xs shadow-sm backdrop-blur ${statusTone(displayStatus)}`}
+            className={`canvas-connection-status absolute z-10 ${statusTone(displayStatus)}`}
             data-status={displayStatus}
             data-testid="canvas-connection-status"
             role="status"
         >
             <Icon aria-hidden="true" className="size-3.5" />
+            <span className="canvas-status-dot" aria-hidden="true" />
             <span>{STATUS_LABELS[displayStatus]}</span>
             {onlineParticipantCount > 0 ? (
                 <span title={`${onlineParticipantCount} collaborators online`}>
@@ -58,7 +59,7 @@ export function CanvasConnectionStatus() {
             {pendingPublishCount > 0 ? (
                 <button
                     aria-label="Retry unsynced changes"
-                    className="font-medium underline underline-offset-2"
+                    className="canvas-status-retry"
                     onClick={retryPendingPublishes}
                     type="button"
                 >

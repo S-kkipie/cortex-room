@@ -36,7 +36,7 @@ export function WorkspaceElementEditor({
         <Textarea
             aria-label={`${element.type} content`}
             autoFocus
-            className="nodrag nowheel h-full resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+            className="canvas-node-editor nodrag nowheel h-full resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
             value={value}
             onPointerDown={(event) => event.stopPropagation()}
             onChange={(event) => setTextDraft(element.id, event.target.value)}

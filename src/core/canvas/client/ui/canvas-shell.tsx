@@ -16,36 +16,51 @@ export function CanvasShell({
     userLabel: string;
 }) {
     return (
-        <div className="flex h-svh flex-col bg-muted/20">
-            <header className="flex min-h-14 items-center gap-3 border-b bg-background px-4 py-2 sm:px-6">
-                <Button
-                    asChild
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0"
-                    aria-label="Back to projects"
-                >
-                    <Link href="/projects">
-                        <ArrowLeft />
-                        <span className="hidden sm:inline">Projects</span>
-                    </Link>
-                </Button>
-                <div className="min-w-0 flex-1">
-                    <p className="text-muted-foreground text-xs uppercase tracking-wide">
-                        Workspace
-                    </p>
-                    <h1 className="truncate font-semibold text-sm">
-                        {projectName}
-                    </h1>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                    <span className="hidden max-w-40 truncate text-muted-foreground text-sm md:inline">
-                        {userLabel}
+        <div
+            className="canvas-shell flex h-svh flex-col"
+            data-canvas-theme="control-room"
+        >
+            <header className="canvas-header">
+                <div className="canvas-header__left">
+                    <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="canvas-back-button"
+                        aria-label="Back to projects"
+                    >
+                        <Link href="/projects">
+                            <ArrowLeft />
+                            <span className="hidden sm:inline">Projects</span>
+                        </Link>
+                    </Button>
+                    <span className="canvas-brand-mark" aria-hidden="true">
+                        CR
                     </span>
-                    <SignOutButton />
+                    <div className="canvas-project-heading">
+                        <p className="canvas-project-kicker">
+                            CORTEX / LIVE CANVAS
+                        </p>
+                        <h1 className="canvas-project-name">{projectName}</h1>
+                    </div>
+                </div>
+                <div className="canvas-header__right">
+                    <div className="canvas-live-indicator">
+                        <span className="canvas-live-dot" aria-hidden="true" />
+                        <span>Live workspace</span>
+                    </div>
+                    <div className="canvas-user-chip">
+                        <span className="canvas-avatar" aria-hidden="true">
+                            {userLabel.charAt(0).toUpperCase() || "?"}
+                        </span>
+                        <span className="canvas-user-label">{userLabel}</span>
+                    </div>
+                    <div className="canvas-signout">
+                        <SignOutButton />
+                    </div>
                 </div>
             </header>
-            <main className="relative flex min-h-0 flex-1 overflow-hidden">
+            <main className="canvas-main relative flex min-h-0 flex-1">
                 <NavigableCanvas projectId={projectId} userId={userId} />
             </main>
         </div>

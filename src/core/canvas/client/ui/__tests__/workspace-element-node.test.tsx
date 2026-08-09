@@ -112,6 +112,11 @@ describe("WorkspaceElementNode", () => {
         expect(
             view.container.querySelector('[data-element-type="CARD"]'),
         ).not.toBeNull();
+        expect(
+            view.container
+                .querySelector('[data-element-type="CARD"]')
+                ?.classList.contains("canvas-node"),
+        ).toBe(true);
         expect(view.container.textContent).toContain("Title");
         expect(view.container.textContent).toContain("Description");
         expect(

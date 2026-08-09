@@ -52,6 +52,11 @@ describe("CanvasToolbar", () => {
             view.container.querySelector('[aria-label="Canvas tools"]'),
         ).not.toBeNull();
         expect(
+            view.container
+                .querySelector('[aria-label="Canvas tools"]')
+                ?.classList.contains("canvas-toolbar"),
+        ).toBe(true);
+        expect(
             view.container.querySelector('[aria-label="Select"]'),
         ).not.toBeNull();
         expect(

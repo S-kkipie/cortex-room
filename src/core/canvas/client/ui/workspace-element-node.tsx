@@ -24,11 +24,11 @@ function ElementContent({
 
         return (
             <>
-                <p className="font-semibold text-sm">
+                <p className="canvas-node__title font-semibold text-sm">
                     {title || "Untitled card"}
                 </p>
                 {description ? (
-                    <p className="mt-2 whitespace-pre-wrap text-muted-foreground text-xs">
+                    <p className="canvas-node__description mt-2 whitespace-pre-wrap text-xs">
                         {description}
                     </p>
                 ) : null}
@@ -40,8 +40,8 @@ function ElementContent({
         <p
             className={
                 element.type === "HEADING"
-                    ? "font-semibold text-2xl"
-                    : "whitespace-pre-wrap text-sm"
+                    ? "canvas-node__heading font-semibold text-2xl"
+                    : "canvas-node__text whitespace-pre-wrap text-sm"
             }
         >
             {content || "Double-click to edit"}
@@ -67,6 +67,16 @@ export function WorkspaceElementNode({
     const remoteSelectionLabel = remoteSelectedBy
         .map((participant) => participant.label)
         .join(", ");
+    const nodeClassName = [
+        "canvas-node",
+        `canvas-node--${element.type.toLowerCase()}`,
+        selected ? "canvas-node--selected" : "",
+        remoteSelectedBy.length
+            ? "canvas-node--remote ring-2 ring-sky-500/70 ring-offset-2 ring-offset-background"
+            : "",
+    ]
+        .filter(Boolean)
+        .join(" ");
 
     return (
         // React Flow owns keyboard focus and node interaction for this container.
@@ -74,22 +84,14 @@ export function WorkspaceElementNode({
         // biome-ignore lint/a11y/noStaticElementInteractions: React Flow node container
         <div
             data-element-type={element.type}
-            className={`relative h-full w-full rounded-xl border p-4 shadow-sm ${
-                element.type === "STICKY"
-                    ? "border-amber-300 bg-amber-100/95 dark:border-amber-700 dark:bg-amber-950/70"
-                    : element.type === "CARD"
-                      ? "border-border bg-card"
-                      : element.type === "HEADING"
-                        ? "border-transparent bg-transparent p-2 shadow-none"
-                        : "border-border/70 bg-background/95"
-            } ${remoteSelectedBy.length ? "ring-2 ring-sky-500/70 ring-offset-2 ring-offset-background" : ""}`}
+            className={nodeClassName}
             onDoubleClick={(event) => {
                 event.stopPropagation();
                 beginEditing(element.id);
             }}
         >
             {remoteSelectionLabel ? (
-                <span className="pointer-events-none absolute -top-3 right-2 z-10 rounded-full bg-sky-500 px-2 py-0.5 font-medium text-[10px] text-white shadow-sm">
+                <span className="canvas-remote-label pointer-events-none absolute -top-3 right-2 z-10 rounded-full px-2 py-0.5 font-medium text-[10px] shadow-sm">
                     {remoteSelectionLabel}
                 </span>
             ) : null}

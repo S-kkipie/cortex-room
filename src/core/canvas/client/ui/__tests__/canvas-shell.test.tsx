@@ -51,6 +51,8 @@ describe("CanvasShell", () => {
         const shell = container.firstElementChild;
         expect(shell?.classList.contains("h-svh")).toBe(true);
         expect(shell?.classList.contains("min-h-svh")).toBe(false);
+        expect(shell?.classList.contains("canvas-shell")).toBe(true);
+        expect(shell?.getAttribute("data-canvas-theme")).toBe("control-room");
 
         act(() => root.unmount());
     });
