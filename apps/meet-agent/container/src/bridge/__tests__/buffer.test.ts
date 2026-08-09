@@ -42,6 +42,23 @@ describe("BridgeBuffer", () => {
         expect(b.shouldFlush(60_000)).toBe(false);
     });
 
+    it("uses unresolved diarizedLabel when displayName is missing", () => {
+        const b = new BridgeBuffer(0);
+        b.append({
+            segmentId: "u",
+            meetingId: "m1",
+            speaker: { kind: "unresolved", diarizedLabel: "Speaker 1" },
+            text: "hello",
+            startedAt: "2026-08-08T00:00:00.000Z",
+            endedAt: "2026-08-08T00:00:01.000Z",
+            isFinal: true,
+            identityConfidence: "resolved",
+        });
+
+        const { text } = b.drain(1000);
+        expect(text).toBe("Speaker 1: hello");
+    });
+
     it("drain concatenates speaker-labelled lines and resets", () => {
         const b = new BridgeBuffer(0);
         b.append(seg("hello", true, "Diego"));

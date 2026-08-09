@@ -4,7 +4,15 @@ export const FLUSH_COUNT = 8;
 export const FLUSH_MS = 30_000;
 
 function speakerName(seg: TranscriptSegment): string {
-    return "displayName" in seg.speaker && seg.speaker.displayName ? seg.speaker.displayName : "Unknown";
+    if ("displayName" in seg.speaker && seg.speaker.displayName) {
+        return seg.speaker.displayName;
+    }
+
+    if (seg.speaker.kind === "unresolved" && seg.speaker.diarizedLabel) {
+        return seg.speaker.diarizedLabel;
+    }
+
+    return "Unknown";
 }
 
 export class BridgeBuffer {
