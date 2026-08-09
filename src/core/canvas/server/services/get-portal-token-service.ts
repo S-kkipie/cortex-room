@@ -1,5 +1,6 @@
 import "server-only";
 import { ServerConfig } from "@/config/server-config";
+import { canvasPortalChannelId } from "@/core/canvas/domain/portal-channel";
 import type { PortalTokenResponse } from "@/core/canvas/domain/types";
 import {
     portalExternalTokenResponseSchema,
@@ -37,7 +38,7 @@ export async function getPortalTokenService(
             );
         }
 
-        const channelId = `room-${projectId}`;
+        const channelId = canvasPortalChannelId(projectId);
         const requestBody = portalTokenRequestSchema.parse({
             userId: actorId,
             claims: { username: userLabel },

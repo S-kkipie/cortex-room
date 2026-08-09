@@ -15,6 +15,7 @@ import {
     useState,
 } from "react";
 import { ClientConfig } from "@/config/client-config";
+import { canvasPortalChannelId } from "@/core/canvas/domain/portal-channel";
 import {
     canvasPortalMessageSchema,
     portalTokenEnvelopeSchema,
@@ -114,7 +115,7 @@ function ConnectedCanvasPortal({
     projectId,
     children,
 }: PropsWithChildren<{ projectId: string }>) {
-    const channelId = `canvas-${projectId}`;
+    const channelId = canvasPortalChannelId(projectId);
     const channel = useChannel<CanvasPortalMessage>({
         channelId,
         history: PORTAL_HISTORY_SIZE,

@@ -1,5 +1,6 @@
 import type { Message } from "@portalsdk/core";
 import { describe, expect, it } from "vitest";
+import { canvasPortalChannelId } from "@/core/canvas/domain/portal-channel";
 import type { CanvasPortalMessage } from "@/core/canvas/domain/types";
 import { normalizePortalMessages } from "../canvas-portal-provider";
 
@@ -55,6 +56,10 @@ const validMessage: CanvasPortalMessage = {
 };
 
 describe("normalizePortalMessages", () => {
+    it("uses the same room channel contract as the token service", () => {
+        expect(canvasPortalChannelId(PROJECT_ID)).toBe(`room-${PROJECT_ID}`);
+    });
+
     it("uses the verified Portal sender instead of content senderId", () => {
         const [normalized] = normalizePortalMessages(
             [message(validMessage)],
