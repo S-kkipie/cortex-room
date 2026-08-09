@@ -49,4 +49,16 @@ describe("contract", () => {
         const ev = { type: "participant.joined", participant: { participantId: "p1" }, at: "2026-08-08T00:00:00.000Z" };
         expect(agentEventSchema.parse(ev).type).toBe("participant.joined");
     });
+
+    it("discriminates a speaker.active event", () => {
+        const ev = {
+            type: "speaker.active",
+            participantId: "42",
+            active: true,
+            at: "2026-08-09T00:00:00.000Z",
+        };
+        const parsed = agentEventSchema.parse(ev);
+        expect(parsed.type).toBe("speaker.active");
+        if (parsed.type === "speaker.active") expect(parsed.active).toBe(true);
+    });
 });

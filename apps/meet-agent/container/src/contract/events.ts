@@ -35,5 +35,6 @@ export const agentEventSchema = z.discriminatedUnion("type", [
     z.object({ type: z.literal("participant.joined"), participant: participantSchema, at: z.string() }),
     z.object({ type: z.literal("participant.left"), participantId: z.string(), at: z.string() }),
     z.object({ type: z.literal("transcript.segment"), segment: transcriptSegmentSchema }),
+    z.object({ type: z.literal("speaker.active"), participantId: z.string(), active: z.boolean(), at: z.string() }),
 ]);
 export type AgentEvent = z.infer<typeof agentEventSchema>;
