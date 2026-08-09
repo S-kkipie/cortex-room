@@ -15,6 +15,7 @@ import { VerifyEmail } from "./verify-email";
 export type AuthProps = {
     className?: string;
     path?: string;
+    redirectTo?: string;
     socialLayout?: SocialLayout;
     socialPosition?: "top" | "bottom";
     /** @remarks `AuthView` */
@@ -54,12 +55,20 @@ const AUTH_VIEWS: Partial<Record<AuthView, ComponentType<AuthProps>>> = {
 export function Auth({
     className,
     path,
+    redirectTo: redirectToOverride,
     socialLayout,
     socialPosition,
     view,
 }: AuthProps) {
-    const { basePaths, emailAndPassword, plugins, viewPaths, navigate } =
-        useAuth();
+    const {
+        basePaths,
+        emailAndPassword,
+        plugins,
+        redirectTo: providerRedirectTo,
+        viewPaths,
+        navigate,
+    } = useAuth();
+    const redirectTo = redirectToOverride ?? providerRedirectTo;
 
     if (!view && !path) {
         throw new Error(
@@ -122,6 +131,7 @@ export function Auth({
         return (
             <PluginView
                 className={className}
+                redirectTo={redirectTo}
                 socialLayout={socialLayout}
                 socialPosition={socialPosition}
             />
@@ -140,6 +150,7 @@ export function Auth({
             return (
                 <Fallback
                     className={className}
+                    redirectTo={redirectTo}
                     socialLayout={socialLayout}
                     socialPosition={socialPosition}
                 />
@@ -158,6 +169,7 @@ export function Auth({
     return (
         <AuthView
             className={className}
+            redirectTo={redirectTo}
             socialLayout={socialLayout}
             socialPosition={socialPosition}
         />

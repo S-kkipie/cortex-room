@@ -1,5 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { EllipsisIcon, TagIcon, TextIcon } from "lucide-react";
+import Link from "next/link";
 import type { Dispatch, SetStateAction } from "react";
 import type { Project, ProjectStatus } from "@/core/project/domain/types";
 import DescriptionCell from "@/frontend/components/data-table/description-cell";
@@ -140,6 +141,11 @@ export default function getProjectTableColumns({
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                            <Link href={`/projects/${row.original.id}/canvas`}>
+                                Open canvas
+                            </Link>
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                             onSelect={() =>
                                 setRowAction({ row, variant: "update" })
