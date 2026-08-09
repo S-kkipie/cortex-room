@@ -52,7 +52,9 @@ Tests       26 passed (26)
 
 ## Commit
 
-Commit hash: b692ac0 (amended below to include this hash in the report).
+Implementation commit hash: 4617bbd.
+
+The report update itself is included in the final follow-up commit reported by the caller.
 
 ## Concerns
 
