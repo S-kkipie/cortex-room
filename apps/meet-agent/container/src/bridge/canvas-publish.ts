@@ -2,6 +2,7 @@ import { Portal } from "@portalsdk/core";
 import { canvasPortalChannelId } from "../../../../../src/core/canvas/domain/portal-channel";
 import { canvasPortalMessageSchema } from "../../../../../src/core/canvas/domain/schemas";
 import type { CanvasPortalMessage } from "../../../../../src/core/canvas/domain/types";
+import { mintPortalToken } from "./portal-token";
 import type { CanvasNote, NoteCategory } from "./types";
 
 const PREFIX: Record<NoteCategory, string> = {
@@ -61,15 +62,30 @@ export function toCanvasMessage(args: {
 export function createCanvasPublisher(opts: {
     apiKey: string;
     projectId: string;
-    token?: string;
+    secretKey?: string;
+    token?: string | (() => Promise<string>);
     _sendImpl?: (msg: unknown) => Promise<void>;
 }): { publish(msg: unknown): Promise<void> } {
     let send = opts._sendImpl;
 
     const ensure = (): ((msg: unknown) => Promise<void>) => {
         if (send) return send;
-        const portal = new Portal({ apiKey: opts.apiKey, token: opts.token });
-        const room = portal.channel<CanvasPortalMessage>(canvasPortalChannelId(opts.projectId));
+        // The canvas channel is token-gated; mint a bot token (connect+publish)
+        // on connect/expiry via the secret key. A callback lets the SDK
+        // re-resolve it when it expires.
+        const token =
+            opts.token ??
+            (opts.secretKey
+                ? () =>
+                      mintPortalToken({
+                          secretKey: opts.secretKey as string,
+                          projectId: opts.projectId,
+                      })
+                : undefined);
+        const portal = new Portal({ apiKey: opts.apiKey, token });
+        const room = portal.channel<CanvasPortalMessage>(
+            canvasPortalChannelId(opts.projectId),
+        );
         room.acquire();
         send = async (msg) => {
             await room.send({ content: msg as CanvasPortalMessage });

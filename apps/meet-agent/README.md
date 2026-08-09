@@ -19,7 +19,8 @@ cd apps/meet-agent
 wrangler secret put AUTH_TOKEN            # bearer for the control API
 wrangler secret put RECALL_API_KEY        # Recall API key (rotate if ever exposed)
 wrangler secret put RECALL_WEBHOOK_SECRET # whsec_... workspace verification secret
-wrangler secret put PORTAL_API_KEY        # Portal publishable key
+wrangler secret put PORTAL_API_KEY        # Portal publishable key (pk_...)
+wrangler secret put PORTAL_SECRET_KEY     # Portal secret key (sk_...) to mint the bot's room token
 wrangler secret put GEMINI_API_KEY        # Gemini API key for AI note extraction
 ```
 
