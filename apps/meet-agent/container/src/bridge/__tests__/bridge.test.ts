@@ -52,6 +52,31 @@ describe("Bridge", () => {
         expect(publish).toHaveBeenCalledTimes(1);
     });
 
+    it("processes a window buffered while a prior flush is in flight (no dropped flush)", async () => {
+        let gateResolve!: () => void;
+        const gate = new Promise<void>((r) => {
+            gateResolve = r;
+        });
+        let calls = 0;
+        const extractImpl = async () => {
+            calls += 1;
+            const c = calls;
+            if (c === 1) await gate;
+            return JSON.stringify({ topics: [{ text: `topic-${c}` }] });
+        };
+        const { bridge, publish } = makeBridge(extractImpl);
+
+        bridge.onSegment(seg("first window"));
+        const pA = bridge.flush(); // drains window 1, blocks on gate
+        await new Promise((r) => setTimeout(r, 0)); // let A drain + park at gate
+        bridge.onSegment(seg("second window"));
+        const pB = bridge.flush(); // must run AFTER A, not be dropped
+        gateResolve();
+        await Promise.all([pA, pB]);
+
+        expect(publish).toHaveBeenCalledTimes(2);
+    });
+
     it("never throws when extract fails", async () => {
         const extractImpl = async () => {
             throw new Error("boom");

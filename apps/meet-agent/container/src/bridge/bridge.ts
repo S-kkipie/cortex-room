@@ -33,39 +33,45 @@ export class Bridge {
         if (this.buffer.shouldFlush(this.opts.now())) void this.flush();
     }
 
+    // Serialize flushes by chaining: a flush requested while another is in
+    // flight runs AFTER it (never concurrently, never dropped). The returned
+    // promise resolves once THIS caller's own drain has been processed, so an
+    // explicit `await bridge.flush()` (e.g. on /stop) drains the tail.
     async flush(): Promise<void> {
-        if (this.flushing) return this.flushing;
+        const prev = this.flushing ?? Promise.resolve();
+        const mine = prev.then(() => this.runFlushOnce());
+        this.flushing = mine;
+        mine.finally(() => {
+            if (this.flushing === mine) this.flushing = null;
+        });
+        return mine;
+    }
 
-        this.flushing = (async () => {
-            try {
-                const { text } = this.buffer.drain(this.opts.now());
-                if (!text) return;
-                const raw = await extractNotes({
-                    newText: text,
-                    alreadyEmitted: this.emitted,
-                    extractImpl: this.opts.extractImpl,
+    private async runFlushOnce(): Promise<void> {
+        try {
+            const { text } = this.buffer.drain(this.opts.now());
+            if (!text) return;
+            const raw = await extractNotes({
+                newText: text,
+                alreadyEmitted: this.emitted,
+                extractImpl: this.opts.extractImpl,
+            });
+            const owned = resolveOwners(raw, this.opts.participants());
+            const fresh = this.dedup.filterNew(owned);
+            for (const note of fresh) {
+                this.emitted.push(note.text);
+                const pos = this.layout.place(note.category);
+                const msg = toCanvasMessage({
+                    note,
+                    projectId: this.opts.projectId,
+                    pos,
+                    genId: this.opts.genId,
+                    nowIso: this.opts.nowIso(),
                 });
-                const owned = resolveOwners(raw, this.opts.participants());
-                const fresh = this.dedup.filterNew(owned);
-                for (const note of fresh) {
-                    this.emitted.push(note.text);
-                    const pos = this.layout.place(note.category);
-                    const msg = toCanvasMessage({
-                        note,
-                        projectId: this.opts.projectId,
-                        pos,
-                        genId: this.opts.genId,
-                        nowIso: this.opts.nowIso(),
-                    });
-                    await this.opts.publisher.publish(msg);
-                }
-            } catch (err) {
-                console.error("[bridge] flush failed (continuing):", err);
-            } finally {
-                this.flushing = null;
+                await this.opts.publisher.publish(msg);
             }
-        })();
-
-        return this.flushing;
+        } catch (err) {
+            console.error("[bridge] flush failed (continuing):", err);
+        }
     }
 }
