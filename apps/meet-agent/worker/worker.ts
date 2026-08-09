@@ -1,5 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
-import { AgentEvent, Participant } from "../container/src/contract/events";
+import { Bridge } from "../container/src/bridge/bridge";
+import { createCanvasPublisher } from "../container/src/bridge/canvas-publish";
+import { createGeminiExtractor } from "../container/src/bridge/extract";
+import type { AgentEvent, Participant, TranscriptSegment } from "../container/src/contract/events";
 import { EventBuffer } from "../container/src/emit/buffer";
 import { createPortalPublisher, type Publisher } from "../container/src/emit/portal";
 import { createRecallBot, RECALL_EVENTS, stopRecallBot } from "../container/src/recall/client";
@@ -48,8 +51,13 @@ export type Env = {
     RECALL_REGION: string;
     RECALL_WEBHOOK_SECRET: string;
     PORTAL_API_KEY: string;
+    GEMINI_API_KEY: string;
     PUBLIC_BASE_URL: string;
 };
+
+export function bridgeShouldConsume(ev: AgentEvent): boolean {
+    return ev.type === "transcript.segment" && ev.segment.isFinal;
+}
 
 type SessionState = "idle" | "in_meeting" | "ended";
 
@@ -71,6 +79,8 @@ export class MeetingAgent extends DurableObject<Env> {
     private t0Anchored: number | null = null;
     private botId: string | null = null;
     private state: SessionState = "idle";
+    private canvasProjectId: string | null = null;
+    private bridge: Bridge | null = null;
 
     private pub(): Publisher {
         if (!this.publisher) {
@@ -84,6 +94,7 @@ export class MeetingAgent extends DurableObject<Env> {
         if (ev.type === "participant.left") this.participants.delete(ev.participantId);
         this.buffer.append(ev);
         void this.pub().publish(ev);
+        if (this.bridge && bridgeShouldConsume(ev)) this.bridge.onSegment((ev as { segment: TranscriptSegment }).segment);
     }
 
     async fetch(req: Request): Promise<Response> {
@@ -93,7 +104,7 @@ export class MeetingAgent extends DurableObject<Env> {
         if (meetingIdHeader) this.meetingId = meetingIdHeader;
 
         if (req.method === "POST" && path === "/start") {
-            const { meetingUrl } = (await req.json()) as { meetingUrl?: string };
+            const { meetingUrl, canvasProjectId } = (await req.json()) as { meetingUrl?: string; canvasProjectId?: string };
             if (!meetingUrl) return new Response("meetingUrl required", { status: 400 });
             let botId: string;
             try {
@@ -107,6 +118,18 @@ export class MeetingAgent extends DurableObject<Env> {
             } catch (err) {
                 return new Response(err instanceof Error ? err.message : "recall create failed", { status: 502 });
             }
+            if (canvasProjectId) {
+                this.canvasProjectId = canvasProjectId;
+                this.bridge = new Bridge({
+                    projectId: canvasProjectId,
+                    extractImpl: createGeminiExtractor({ apiKey: this.env.GEMINI_API_KEY }),
+                    publisher: createCanvasPublisher({ apiKey: this.env.PORTAL_API_KEY, projectId: canvasProjectId }),
+                    participants: () => this.participants.values(),
+                    genId: () => crypto.randomUUID(),
+                    now: () => Date.now(),
+                    nowIso: () => new Date().toISOString(),
+                });
+            }
             this.botId = botId;
             this.t0Ms = Date.now();
             this.state = "in_meeting";
@@ -118,6 +141,7 @@ export class MeetingAgent extends DurableObject<Env> {
             if (this.botId) {
                 await stopRecallBot({ apiKey: this.env.RECALL_API_KEY, region: this.env.RECALL_REGION, botId: this.botId }).catch(() => {});
             }
+            if (this.bridge) await this.bridge.flush().catch(() => {});
             this.state = "ended";
             this.emit({ type: "session.ended", meetingId: this.meetingId, at: new Date(Date.now()).toISOString(), reason: "requested" });
             return Response.json({ state: this.state });
