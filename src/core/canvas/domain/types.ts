@@ -11,6 +11,7 @@ import type {
     elementTombstoneSchema,
     moveElementCommandSchema,
     operationVersionSchema,
+    participantElementPreviewSchema,
     participantPresenceMetadataSchema,
     portalMessageTypeSchema,
     portalTokenEnvelopeSchema,
@@ -38,6 +39,9 @@ export type CanvasMutationResult = z.infer<typeof canvasMutationResultSchema>;
 export type CursorPosition = z.infer<typeof cursorPositionSchema>;
 export type ParticipantPresenceMetadata = z.infer<
     typeof participantPresenceMetadataSchema
+>;
+export type ParticipantElementPreview = z.infer<
+    typeof participantElementPreviewSchema
 >;
 export type PortalTokenResponse = z.infer<typeof portalTokenResponseSchema>;
 export type PortalTokenEnvelope = z.infer<typeof portalTokenEnvelopeSchema>;

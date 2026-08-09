@@ -21,7 +21,23 @@ export function toReactFlowNodes(
     remoteParticipants: readonly CanvasRemoteParticipant[] = [],
 ): WorkspaceElementNode[] {
     return elements.map((element) => {
-        const preview = previews.get(element.id);
+        const remoteParticipantPreview = remoteParticipants
+            .map((participant) => participant.preview)
+            .find((candidate) => candidate?.elementId === element.id);
+        const remotePreview = remoteParticipantPreview
+            ? remoteParticipantPreview.kind === "move"
+                ? {
+                      x: remoteParticipantPreview.x,
+                      y: remoteParticipantPreview.y,
+                  }
+                : remoteParticipantPreview.kind === "resize"
+                  ? {
+                        width: remoteParticipantPreview.width,
+                        height: remoteParticipantPreview.height,
+                    }
+                  : { content: remoteParticipantPreview.content }
+            : undefined;
+        const preview = previews.get(element.id) ?? remotePreview;
         const width = preview?.width ?? element.width;
         const height = preview?.height ?? element.height;
         const remoteSelectedBy = remoteParticipants

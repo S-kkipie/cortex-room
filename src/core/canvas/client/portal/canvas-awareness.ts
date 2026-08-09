@@ -3,6 +3,7 @@ import { participantPresenceMetadataSchema } from "@/core/canvas/domain/schemas"
 import type {
     CanvasPortalMessage,
     CursorPosition,
+    ParticipantElementPreview,
 } from "@/core/canvas/domain/types";
 
 export type CanvasRemoteParticipant = {
@@ -10,6 +11,7 @@ export type CanvasRemoteParticipant = {
     label: string;
     cursor?: CursorPosition;
     selectedElementIds: readonly string[];
+    preview?: ParticipantElementPreview;
 };
 
 export type CanvasAwarenessSnapshot = {
@@ -53,6 +55,9 @@ function detailedAwareness(
             selectedElementIds: metadata.success
                 ? metadata.data.selectedElementIds
                 : [],
+            ...(metadata.success && metadata.data.preview
+                ? { preview: metadata.data.preview }
+                : {}),
         };
         participants.set(participant.id, participantState);
 

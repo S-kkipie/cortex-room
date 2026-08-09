@@ -1,6 +1,6 @@
 "use client";
 
-import { Portal } from "@portalsdk/core";
+import { type Message, Portal } from "@portalsdk/core";
 import {
     PortalProvider,
     type UseChannelResult,
@@ -9,6 +9,7 @@ import {
 import {
     createContext,
     type PropsWithChildren,
+    useCallback,
     useContext,
     useEffect,
     useMemo,
@@ -23,6 +24,7 @@ import {
 import type { CanvasPortalMessage } from "@/core/canvas/domain/types";
 
 const PORTAL_HISTORY_SIZE = 200;
+const PORTAL_LIVE_MESSAGE_SIZE = 200;
 const portalClient = new Portal({
     apiKey: ClientConfig.portalApiKey ?? "pk_unconfigured",
 });
@@ -75,18 +77,37 @@ export function normalizePortalMessages(
     const normalized: CanvasPortalMessage[] = [];
 
     for (const message of messages) {
-        const parsed = canvasPortalMessageSchema.safeParse({
-            ...message.content,
-            ephemeral: message.ephemeral,
-            senderId: message.sender.id,
-        });
-        if (!parsed.success || parsed.data.content.projectId !== projectId) {
-            continue;
-        }
-        normalized.push(parsed.data);
+        const parsed = normalizePortalMessage(message, projectId);
+        if (parsed) normalized.push(parsed);
     }
 
     return normalized;
+}
+
+export function normalizePortalMessage(
+    message: Message<CanvasPortalMessage>,
+    projectId: string,
+): CanvasPortalMessage | undefined {
+    if (message.retracted) return undefined;
+    const parsed = canvasPortalMessageSchema.safeParse({
+        ...message.content,
+        senderId: message.sender.id,
+    });
+    if (!parsed.success || parsed.data.content.projectId !== projectId) {
+        return undefined;
+    }
+    return parsed.data;
+}
+
+function mergePortalMessages(
+    history: readonly CanvasPortalMessage[],
+    live: readonly CanvasPortalMessage[],
+): CanvasPortalMessage[] {
+    const merged = new Map<string, CanvasPortalMessage>();
+    for (const message of [...history, ...live]) {
+        merged.set(message.content.eventId, message);
+    }
+    return [...merged.values()];
 }
 
 function DisabledCanvasPortal({ children }: PropsWithChildren) {
@@ -116,10 +137,28 @@ function ConnectedCanvasPortal({
     children,
 }: PropsWithChildren<{ projectId: string }>) {
     const channelId = canvasPortalChannelId(projectId);
+    const [liveMessages, setLiveMessages] = useState<CanvasPortalMessage[]>([]);
+    const handleMessage = useCallback(
+        (message: Message<CanvasPortalMessage>) => {
+            const normalized = normalizePortalMessage(message, projectId);
+            if (!normalized) return;
+            setLiveMessages((current) => {
+                const next = current.filter(
+                    (candidate) =>
+                        candidate.content.eventId !==
+                        normalized.content.eventId,
+                );
+                next.push(normalized);
+                return next.slice(-PORTAL_LIVE_MESSAGE_SIZE);
+            });
+        },
+        [projectId],
+    );
     const channel = useChannel<CanvasPortalMessage>({
         channelId,
         history: PORTAL_HISTORY_SIZE,
         metadata: { selectedElementIds: [] },
+        onMessage: handleMessage,
         readOn: "manual",
     });
     const [historyReady, setHistoryReady] = useState(false);
@@ -131,10 +170,10 @@ function ConnectedCanvasPortal({
         setHistoryReady(true);
     }, [channel.status]);
 
-    const messages = useMemo(
-        () => normalizePortalMessages(channel.messages, projectId),
-        [channel.messages, projectId],
-    );
+    const messages = useMemo(() => {
+        const history = normalizePortalMessages(channel.messages, projectId);
+        return mergePortalMessages(history, liveMessages);
+    }, [channel.messages, liveMessages, projectId]);
     const value: CanvasPortalContextValue = {
         configured: true,
         status: channel.status,
@@ -146,7 +185,10 @@ function ConnectedCanvasPortal({
             await channel.send({ content: message });
         },
         sendEphemeral: async (message) => {
-            await channel.send({ ephemeral: true, content: message });
+            // Portal core 0.1.5 drops incoming ephemeral frames. Send the
+            // semantic ephemeral event through the reliable channel instead;
+            // Portal middleware retracts it immediately after delivery.
+            await channel.send({ content: message });
         },
         setMetadata: channel.setMetadata,
     };
@@ -171,7 +213,7 @@ export function CanvasPortalProvider({
             client={portalClient}
             token={() => fetchPortalToken(projectId)}
         >
-            <ConnectedCanvasPortal projectId={projectId}>
+            <ConnectedCanvasPortal key={projectId} projectId={projectId}>
                 {children}
             </ConnectedCanvasPortal>
         </PortalProvider>

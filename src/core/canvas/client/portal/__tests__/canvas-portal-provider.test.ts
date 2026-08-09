@@ -2,6 +2,7 @@ import type { Message } from "@portalsdk/core";
 import { describe, expect, it } from "vitest";
 import { canvasPortalChannelId } from "@/core/canvas/domain/portal-channel";
 import type { CanvasPortalMessage } from "@/core/canvas/domain/types";
+import { buildCursorMessage } from "../canvas-portal-events";
 import { normalizePortalMessages } from "../canvas-portal-provider";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000001";
@@ -12,14 +13,16 @@ const OCCURRED_AT = "2026-08-09T12:00:00.000Z";
 function message(
     content: CanvasPortalMessage,
     senderId = "verified-user",
+    wireEphemeral = content.ephemeral,
+    retracted = false,
 ): Message<CanvasPortalMessage> {
     return {
         id: OPERATION_ID,
         channelId: `room-${PROJECT_ID}`,
         sender: { id: senderId, anon: false },
         timestamp: Date.parse(OCCURRED_AT),
-        retracted: false,
-        ephemeral: content.ephemeral,
+        retracted,
+        ephemeral: wireEphemeral,
         kind: "text",
         type: "message",
         content,
@@ -72,6 +75,33 @@ describe("normalizePortalMessages", () => {
         });
     });
 
+    it("preserves semantic ephemeral events sent through reliable delivery", () => {
+        const cursor = buildCursorMessage(
+            {
+                eventId: OPERATION_ID,
+                projectId: PROJECT_ID,
+                occurredAt: OCCURRED_AT,
+                senderId: "spoofed-content-user",
+            },
+            { x: 40, y: 50 },
+        );
+
+        expect(
+            normalizePortalMessages(
+                [message(cursor, "verified-user", false)],
+                PROJECT_ID,
+            ),
+        ).toEqual([
+            expect.objectContaining({
+                ephemeral: true,
+                senderId: "verified-user",
+                content: expect.objectContaining({
+                    kind: "participant.cursor.moved",
+                }),
+            }),
+        ]);
+    });
+
     it("ignores invalid events and messages from another project", () => {
         const otherProjectMessage = message({
             ...validMessage,
@@ -90,7 +120,11 @@ describe("normalizePortalMessages", () => {
 
         expect(
             normalizePortalMessages(
-                [otherProjectMessage, invalidMessage],
+                [
+                    otherProjectMessage,
+                    invalidMessage,
+                    message(validMessage, "verified-user", false, true),
+                ],
                 PROJECT_ID,
             ),
         ).toEqual([]);

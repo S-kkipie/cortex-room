@@ -21,8 +21,10 @@ los estados de sincronización pendientes.
   coordenadas del canvas y se publica como `participant.cursor.moved` efímero,
   throttled a 50 ms.
 - La selección local se publica como `participant.selection.changed` efímera;
-  la metadata de presencia conserva el último cursor y selección con un
-  throttle de 250 ms para que nuevos participantes puedan recuperarlos.
+  la metadata de presencia conserva el último cursor, selección y preview
+  activo con un throttle real de 50 ms para que nuevos participantes puedan
+  recuperarlos y la colaboración siga visible aunque el SDK no modele los
+  mensajes efímeros en `messages`.
 - Los cursores remotos se pintan dentro del viewport de React Flow, por lo que
   cada cliente puede hacer pan/zoom sin desalinear el cursor de los elementos.
 - Las selecciones remotas se muestran como un overlay visual sobre los nodos,
@@ -38,7 +40,7 @@ Incluye:
 
 - adaptadores de publicación para cursor y selección usando los builders y
   `CanvasRealtimePort` de S6;
-- throttling de cursor a 50 ms y metadata de presencia a 250 ms;
+- throttling de cursor y metadata de presencia a 50 ms;
 - normalización de participantes nativos de Portal y fallback desde su
   metadata validada;
 - overlays de cursor/selección integrados con React Flow;
@@ -67,7 +69,11 @@ metadata de cada participante se acepta únicamente mediante
 ```ts
 {
   cursor?: { x: number; y: number },
-  selectedElementIds: string[]
+  selectedElementIds: string[],
+  preview?:
+    | { kind: "move", elementId: string, x: number, y: number }
+    | { kind: "resize", elementId: string, width: number, height: number }
+    | { kind: "text", elementId: string, content: string }
 }
 ```
 
@@ -88,6 +94,13 @@ Los campos `eventId`, `projectId` y `occurredAt` se construyen en el cliente;
 `senderId` se usa sólo al publicar. Al recibir, el adaptador lo reemplaza por
 `message.sender.id`, igual que en S6, y descarta mensajes que fallen Zod o no
 pertenezcan al proyecto actual.
+
+Portal Core 0.1.5 descarta los frames efímeros entrantes y su `setMetadata`
+no propaga actualizaciones entre sesiones en el servicio actual. Mientras esa
+limitación exista, los eventos siguen siendo semánticamente efímeros pero se
+envían por el transporte fiable. `onMessage` los captura en un buffer local de
+200 eventos y middleware de `portal.config.ts` los retracta después de la
+entrega, por lo que no quedan en history ni se escriben en PostgreSQL.
 
 ### 4.3 Coordenadas y overlays
 
@@ -120,8 +133,8 @@ flow, sin llamadas al API del canvas.
 Given el usuario cambia la selección local
 When se actualiza el controller
 Then se publica un evento efímero y se actualiza metadata como máximo cada
-250 ms. Un usuario que llega tarde puede obtener el último estado desde
-presence metadata.
+50 ms. Un usuario que llega tarde puede obtener el último estado desde
+presence metadata. El throttle no se reinicia con cada movimiento continuo.
 
 ### AC-04 Render independiente
 

@@ -7,6 +7,7 @@ import {
     CanvasControllerProvider,
     useCanvasController,
 } from "@/core/canvas/client/controller/canvas-controller-context";
+import { PRESENCE_METADATA_THROTTLE_MS } from "@/core/canvas/domain/schemas";
 import type { CanvasMutationResult } from "@/core/canvas/domain/types";
 
 const elementId = "550e8400-e29b-41d4-a716-446655440001";
@@ -311,7 +312,7 @@ describe("CanvasControllerProvider", () => {
         view.unmount();
     });
 
-    it("throttles presence metadata while selection and cursor change", () => {
+    it("throttles presence metadata without starving continuous live updates", () => {
         vi.useFakeTimers();
         portalMock.configured = true;
         const view = render(
@@ -330,12 +331,23 @@ describe("CanvasControllerProvider", () => {
         });
 
         expect(portalMock.setMetadata).not.toHaveBeenCalled();
-        act(() => vi.advanceTimersByTime(249));
+        act(() => vi.advanceTimersByTime(PRESENCE_METADATA_THROTTLE_MS / 2));
+        act(() => {
+            view.container
+                .querySelectorAll<HTMLButtonElement>("button")[3]
+                ?.click();
+        });
         expect(portalMock.setMetadata).not.toHaveBeenCalled();
-        act(() => vi.advanceTimersByTime(1));
+        act(() => vi.advanceTimersByTime(PRESENCE_METADATA_THROTTLE_MS / 2));
         expect(portalMock.setMetadata).toHaveBeenCalledWith({
             cursor: { x: 20, y: 30 },
             selectedElementIds: [elementId],
+            preview: {
+                kind: "move",
+                elementId,
+                x: 80,
+                y: 90,
+            },
         });
         view.unmount();
     });

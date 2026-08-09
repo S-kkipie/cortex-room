@@ -3,7 +3,7 @@ import { z } from "zod";
 export const MAX_ELEMENT_CONTENT_LENGTH = 20_000;
 export const ELEMENT_PREVIEW_THROTTLE_MS = 50;
 export const CURSOR_THROTTLE_MS = 50;
-export const PRESENCE_METADATA_THROTTLE_MS = 250;
+export const PRESENCE_METADATA_THROTTLE_MS = 50;
 export const TEXT_PREVIEW_DEBOUNCE_MS = 100;
 export const TEXT_COMMIT_IDLE_MS = 500;
 
@@ -215,6 +215,26 @@ export const cursorPositionSchema = z.strictObject({
     y: z.number().finite(),
 });
 
+export const participantElementPreviewSchema = z.discriminatedUnion("kind", [
+    z.strictObject({
+        kind: z.literal("move"),
+        elementId: z.uuid(),
+        x: z.number().finite(),
+        y: z.number().finite(),
+    }),
+    z.strictObject({
+        kind: z.literal("resize"),
+        elementId: z.uuid(),
+        width: z.number().finite().positive(),
+        height: z.number().finite().positive(),
+    }),
+    z.strictObject({
+        kind: z.literal("text"),
+        elementId: z.uuid(),
+        content: z.string().max(MAX_ELEMENT_CONTENT_LENGTH),
+    }),
+]);
+
 export const cursorMovedEventSchema = portalEventMetadataSchema.extend({
     kind: z.literal("participant.cursor.moved"),
     cursor: cursorPositionSchema,
@@ -228,6 +248,7 @@ export const selectionChangedEventSchema = portalEventMetadataSchema.extend({
 export const participantPresenceMetadataSchema = z.strictObject({
     cursor: cursorPositionSchema.optional(),
     selectedElementIds: z.array(z.uuid()).default([]),
+    preview: participantElementPreviewSchema.optional(),
 });
 
 export const portalTokenResponseSchema = z.strictObject({

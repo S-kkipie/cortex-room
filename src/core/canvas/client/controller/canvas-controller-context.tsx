@@ -31,6 +31,8 @@ import type {
     CanvasMutationResult,
     CanvasSnapshot,
     CursorPosition,
+    ParticipantElementPreview,
+    ParticipantPresenceMetadata,
 } from "@/core/canvas/domain/types";
 import type { CanvasActions, CanvasSelectionPort } from "./canvas-controller";
 import type { CanvasPreview, CanvasPreviewPort } from "./canvas-preview";
@@ -105,12 +107,19 @@ export function CanvasControllerProvider({
     const [localCursor, setLocalCursor] = useState<CursorPosition | undefined>(
         undefined,
     );
+    const [localPreview, setLocalPreview] = useState<
+        ParticipantElementPreview | undefined
+    >(undefined);
     const [fitViewHasRun, setFitViewHasRun] = useState(false);
     const pendingTextCommitsRef = useRef(new Set<string>());
     const selectedElementIdsRef = useRef(selectedElementIds);
     const presenceMetadataTimerRef = useRef<ReturnType<
         typeof setTimeout
     > | null>(null);
+    const pendingPresenceMetadataRef =
+        useRef<ParticipantPresenceMetadata | null>(null);
+    const lastPresenceMetadataSentAtRef = useRef(Date.now());
+    const presenceMetadataProjectRef = useRef(projectId);
     const selectionInitializedRef = useRef(false);
     const messageBuffer = useMemo(() => createCanvasMessageBuffer(), []);
     const messageBufferProjectRef = useRef(projectId);
@@ -154,6 +163,8 @@ export function CanvasControllerProvider({
     );
     const canvas = useCanvas();
     const portal = useCanvasPortal();
+    const setMetadataRef = useRef(portal.setMetadata);
+    setMetadataRef.current = portal.setMetadata;
     const persistentSendRef = useRef(portal.sendPersistent);
     const ephemeralSendRef = useRef(portal.sendEphemeral);
     persistentSendRef.current = portal.sendPersistent;
@@ -249,31 +260,68 @@ export function CanvasControllerProvider({
     }, [actions, selectedElementIds]);
 
     useEffect(() => {
-        if (!portal.configured) return;
+        if (presenceMetadataProjectRef.current === projectId) return;
+        presenceMetadataProjectRef.current = projectId;
         if (presenceMetadataTimerRef.current) {
             clearTimeout(presenceMetadataTimerRef.current);
-        }
-
-        presenceMetadataTimerRef.current = setTimeout(() => {
             presenceMetadataTimerRef.current = null;
-            portal.setMetadata({
-                ...(localCursor ? { cursor: localCursor } : {}),
-                selectedElementIds,
-            });
-        }, PRESENCE_METADATA_THROTTLE_MS);
+        }
+        pendingPresenceMetadataRef.current = null;
+        lastPresenceMetadataSentAtRef.current = Date.now();
+        setLocalCursor(undefined);
+        setLocalPreview(undefined);
+    }, [projectId]);
 
-        return () => {
+    useEffect(() => {
+        if (!portal.configured) {
             if (presenceMetadataTimerRef.current) {
                 clearTimeout(presenceMetadataTimerRef.current);
                 presenceMetadataTimerRef.current = null;
             }
+            pendingPresenceMetadataRef.current = null;
+            return;
+        }
+
+        pendingPresenceMetadataRef.current = {
+            ...(localCursor ? { cursor: localCursor } : {}),
+            selectedElementIds,
+            ...(localPreview ? { preview: localPreview } : {}),
+        } satisfies ParticipantPresenceMetadata;
+
+        const flush = () => {
+            presenceMetadataTimerRef.current = null;
+            const metadata = pendingPresenceMetadataRef.current;
+            if (!metadata) return;
+            pendingPresenceMetadataRef.current = null;
+            lastPresenceMetadataSentAtRef.current = Date.now();
+            setMetadataRef.current(metadata);
         };
-    }, [
-        localCursor,
-        portal.configured,
-        portal.setMetadata,
-        selectedElementIds,
-    ]);
+        const elapsed = Date.now() - lastPresenceMetadataSentAtRef.current;
+        if (
+            !presenceMetadataTimerRef.current &&
+            elapsed >= PRESENCE_METADATA_THROTTLE_MS
+        ) {
+            flush();
+            return;
+        }
+        if (!presenceMetadataTimerRef.current) {
+            presenceMetadataTimerRef.current = setTimeout(
+                flush,
+                Math.max(0, PRESENCE_METADATA_THROTTLE_MS - elapsed),
+            );
+        }
+    }, [localCursor, localPreview, portal.configured, selectedElementIds]);
+
+    useEffect(
+        () => () => {
+            if (presenceMetadataTimerRef.current) {
+                clearTimeout(presenceMetadataTimerRef.current);
+                presenceMetadataTimerRef.current = null;
+            }
+            pendingPresenceMetadataRef.current = null;
+        },
+        [],
+    );
 
     useEffect(() => () => actions.cancelAllPreviews(), [actions]);
 
@@ -283,6 +331,9 @@ export function CanvasControllerProvider({
         (elementId: string) => {
             actions.cancelPreviews(elementId);
             previewPort.clear(elementId);
+            setLocalPreview((current) =>
+                current?.elementId === elementId ? undefined : current,
+            );
         },
         [actions, previewPort],
     );
@@ -290,6 +341,7 @@ export function CanvasControllerProvider({
     const setMovePreview = useCallback(
         (elementId: string, preview: { x: number; y: number }) => {
             setPreview(elementId, preview);
+            setLocalPreview({ kind: "move", elementId, ...preview });
             actions.publishMovePreview(elementId, preview);
         },
         [actions, setPreview],
@@ -298,6 +350,7 @@ export function CanvasControllerProvider({
     const setResizePreview = useCallback(
         (elementId: string, preview: { width: number; height: number }) => {
             setPreview(elementId, preview);
+            setLocalPreview({ kind: "resize", elementId, ...preview });
             actions.publishResizePreview(elementId, preview);
         },
         [actions, setPreview],
@@ -321,6 +374,7 @@ export function CanvasControllerProvider({
     const setTextDraft = useCallback(
         (elementId: string, content: string) => {
             setTextDrafts((current) => ({ ...current, [elementId]: content }));
+            setLocalPreview({ kind: "text", elementId, content });
             actions.publishTextPreview(elementId, content);
         },
         [actions],
@@ -335,6 +389,9 @@ export function CanvasControllerProvider({
     );
 
     const clearEditing = useCallback((elementId: string) => {
+        setLocalPreview((current) =>
+            current?.elementId === elementId ? undefined : current,
+        );
         setEditingElementId((current) =>
             current === elementId ? null : current,
         );

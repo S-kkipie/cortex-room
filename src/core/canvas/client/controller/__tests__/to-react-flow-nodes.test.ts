@@ -80,4 +80,28 @@ describe("toReactFlowNodes", () => {
             { id: "remote-user", label: "Ada" },
         ]);
     });
+
+    it("renders a remote presence preview without mutating the element", () => {
+        const nodes = toReactFlowNodes(
+            [stickyElement],
+            new Map(),
+            [],
+            [
+                {
+                    id: "remote-user",
+                    label: "Ada",
+                    selectedElementIds: [],
+                    preview: {
+                        kind: "move",
+                        elementId: stickyElement.id,
+                        x: 140,
+                        y: 160,
+                    },
+                },
+            ],
+        );
+
+        expect(nodes[0].position).toEqual({ x: 140, y: 160 });
+        expect(stickyElement).toMatchObject({ x: 10, y: 20 });
+    });
 });

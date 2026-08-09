@@ -57,6 +57,12 @@ describe("canvas awareness", () => {
                     metadata: {
                         cursor: { x: 10, y: 20 },
                         selectedElementIds: [],
+                        preview: {
+                            kind: "move",
+                            elementId,
+                            x: 40,
+                            y: 50,
+                        },
                     },
                 },
                 { id: "local-user", anon: false },
@@ -73,6 +79,12 @@ describe("canvas awareness", () => {
                 label: "Ada",
                 cursor: { x: 80, y: 90 },
                 selectedElementIds: [elementId],
+                preview: {
+                    kind: "move",
+                    elementId,
+                    x: 40,
+                    y: 50,
+                },
             },
         ]);
     });
