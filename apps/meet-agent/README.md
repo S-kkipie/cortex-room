@@ -20,6 +20,7 @@ wrangler secret put AUTH_TOKEN            # bearer for the control API
 wrangler secret put RECALL_API_KEY        # Recall API key (rotate if ever exposed)
 wrangler secret put RECALL_WEBHOOK_SECRET # whsec_... workspace verification secret
 wrangler secret put PORTAL_API_KEY        # Portal publishable key
+wrangler secret put GEMINI_API_KEY        # Gemini API key for AI note extraction
 ```
 
 `RECALL_REGION` (`us-west-2`) and `PUBLIC_BASE_URL` are `vars` in `wrangler.jsonc`;
@@ -34,10 +35,12 @@ wrangler deploy
 ## Control API (bearer-authed)
 
 ```text
-POST /meetings/:id/start      { "meetingUrl": "https://meet.google.com/xxx" }
+POST /meetings/:id/start      { "meetingUrl": "https://meet.google.com/xxx", "canvasProjectId": "99999999-9999-4999-8999-999999999999" }
 POST /meetings/:id/stop
 GET  /meetings/:id            → { state, participants }
 GET  /meetings/:id/transcript?since=<cursor>
 GET  /meetings/:id/stream     → SSE
 POST /webhooks/recall/:id/    ← Recall (HMAC-verified, not bearer)
 ```
+
+`canvasProjectId` is optional on `/start` and, when present, must be a UUID (the canvas wire contract requires it) — a non-UUID value is rejected with 400. If provided, the agent extracts AI notes and publishes them as sticky notes to Portal channel `canvas-{projectId}`. If omitted, behavior stays back-compat as transcription-only. Note that AI note publishing is best-effort and is currently not persisted (Portal-only) until a dedicated canvas-mutation service is in place.

@@ -15,10 +15,14 @@ Google Meet link. Recall billing is active per meeting-minute.
 4. Speak in the meeting with ≥2 participants. Confirm `transcript.segment` events
    appear with `identityConfidence:"resolved"` and the correct `speaker.displayName`,
    plus `speaker.active` events on speech start/stop.
-5. Roster: `curl "$URL/meetings/demo" -H "authorization: Bearer $AUTH_TOKEN"` lists participants.
-6. Stop: `curl -XPOST "$URL/meetings/demo/stop" -H "authorization: Bearer $AUTH_TOKEN"`.
+5. Start a bot with `canvasProjectId` in the body, and speak a clear action item. Within ~30s,
+   confirm a `workspace.element.created` (`created.final`) STICKY appears on Portal channel
+   `canvas-{projectId}`. Then verify a start without `canvasProjectId` still transcribes and
+   creates no canvas elements.
+6. Roster: `curl "$URL/meetings/demo" -H "authorization: Bearer $AUTH_TOKEN"` lists participants.
+7. Stop: `curl -XPOST "$URL/meetings/demo/stop" -H "authorization: Bearer $AUTH_TOKEN"`.
    The bot leaves; a `session.ended` event appears on the stream.
-7. Replay: `curl "$URL/meetings/demo/transcript?since=0" -H "authorization: Bearer $AUTH_TOKEN"`.
+8. Replay: `curl "$URL/meetings/demo/transcript?since=0" -H "authorization: Bearer $AUTH_TOKEN"`.
 
 ## Live-verification points (confirm against current Recall docs during this run)
 - Stop-bot endpoint path (`/api/v1/bot/{id}/leave_call/`).
