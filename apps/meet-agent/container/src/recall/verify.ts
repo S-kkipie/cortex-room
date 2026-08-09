@@ -28,8 +28,9 @@ export async function verifyRecallSignature(args: {
         return false;
     }
 
-    const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-    const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${id}.${ts}.${rawBody ?? ""}`));
+    const key = await crypto.subtle.importKey("raw", keyBytes.buffer as ArrayBuffer, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const payload = new TextEncoder().encode(`${id}.${ts}.${rawBody ?? ""}`);
+    const mac = await crypto.subtle.sign("HMAC", key, payload.buffer as ArrayBuffer);
     const expected = btoa(String.fromCharCode(...new Uint8Array(mac)));
 
     for (const part of sigHeader.split(" ")) {

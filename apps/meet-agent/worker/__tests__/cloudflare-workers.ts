@@ -1,1 +1,3 @@
-export class Container {}
+export class DurableObject<Env = unknown> {
+    protected env!: Env;
+}
