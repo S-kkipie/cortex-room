@@ -17,6 +17,12 @@ describe("NoteDedup", () => {
         expect(d.filterNew([note("action", "  ship   it.  ")])).toHaveLength(0);
     });
 
+    it("dedups punctuation preceded by a space (trailing-space regression)", () => {
+        const d = new NoteDedup();
+        d.filterNew([note("action", "Ship it")]);
+        expect(d.filterNew([note("action", "Ship it !")])).toHaveLength(0);
+    });
+
     it("keeps same text under different category", () => {
         const d = new NoteDedup();
         d.filterNew([note("action", "review PR")]);

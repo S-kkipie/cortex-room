@@ -1,7 +1,11 @@
 import type { CanvasNote } from "./types";
 
 function normalize(text: string): string {
-    return text.toLowerCase().replace(/\s+/g, " ").trim().replace(/[.!?,;:]+$/, "");
+    return text
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .replace(/[\s.!?,;:]+$/, "")
+        .trim();
 }
 
 export class NoteDedup {
