@@ -87,6 +87,14 @@ vi.mock("@/core/canvas/client/hooks", () => ({
     }),
 }));
 
+vi.mock("@/core/canvas/client/portal/canvas-portal-provider", () => ({
+    useCanvasPortal: () => ({
+        configured: false,
+        status: "unavailable",
+        historyReady: true,
+    }),
+}));
+
 function Probe() {
     probeRenderCount += 1;
     const controller = useCanvasController();

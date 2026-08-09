@@ -230,6 +230,18 @@ export const participantPresenceMetadataSchema = z.strictObject({
     selectedElementIds: z.array(z.uuid()).default([]),
 });
 
+export const portalTokenResponseSchema = z.strictObject({
+    token: z.string().min(1),
+    channelId: z.string().min(1),
+    expiresAt: z.iso.datetime(),
+});
+
+export const portalTokenEnvelopeSchema = z.strictObject({
+    response: portalTokenResponseSchema,
+    code: z.literal("OK"),
+    status: z.literal(200),
+});
+
 export const canvasPortalEventSchema = z
     .discriminatedUnion("kind", [
         createdFinalEventSchema,

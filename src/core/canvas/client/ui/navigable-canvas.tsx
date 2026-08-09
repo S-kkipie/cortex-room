@@ -3,6 +3,7 @@
 import { ReactFlowProvider, type Viewport } from "@xyflow/react";
 import { useState } from "react";
 import { CanvasControllerProvider } from "@/core/canvas/client/controller/canvas-controller-context";
+import { CanvasPortalProvider } from "@/core/canvas/client/portal/canvas-portal-provider";
 import { CanvasEditor } from "@/core/canvas/client/ui/canvas-editor";
 import { CanvasViewportControls } from "@/core/canvas/client/ui/canvas-viewport-controls";
 import { INITIAL_VIEWPORT } from "@/core/canvas/client/viewport";
@@ -22,13 +23,18 @@ export function NavigableCanvas({
             className="relative size-full overflow-hidden"
         >
             <ReactFlowProvider>
-                <CanvasControllerProvider projectId={projectId} userId={userId}>
-                    <CanvasEditor
-                        viewport={viewport}
-                        onViewportChange={setViewport}
-                    />
-                    <CanvasViewportControls viewport={viewport} />
-                </CanvasControllerProvider>
+                <CanvasPortalProvider projectId={projectId}>
+                    <CanvasControllerProvider
+                        projectId={projectId}
+                        userId={userId}
+                    >
+                        <CanvasEditor
+                            viewport={viewport}
+                            onViewportChange={setViewport}
+                        />
+                        <CanvasViewportControls viewport={viewport} />
+                    </CanvasControllerProvider>
+                </CanvasPortalProvider>
             </ReactFlowProvider>
         </div>
     );

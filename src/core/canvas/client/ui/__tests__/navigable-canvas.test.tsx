@@ -71,6 +71,11 @@ vi.mock("@/core/canvas/client/controller/canvas-controller-context", () => ({
     useCanvasController: () => contextMock,
 }));
 
+vi.mock("@/core/canvas/client/portal/canvas-portal-provider", () => ({
+    CanvasPortalProvider: ({ children }: { children: ReactNode }) =>
+        createElement("div", { "data-testid": "portal-provider" }, children),
+}));
+
 vi.mock("@xyflow/react", () => ({
     BackgroundVariant: { Dots: "dots" },
     Background: (props: {

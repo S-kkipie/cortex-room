@@ -24,6 +24,7 @@ type ControllerOptions = {
     projectId: string;
     userId: string;
     selection: CanvasSelectionPort;
+    enabled?: boolean;
     onError?: (error: unknown) => void;
 };
 
@@ -40,11 +41,15 @@ export const useCanvas = () => {
         projectId,
         userId,
         selection,
+        enabled = true,
         onError,
     }: ControllerOptions) => {
         const procedure = client({ projectId }).elements;
         const snapshotProcedure = procedure.get;
-        const snapshotQuery = useQuery(snapshotProcedure.queryOptions());
+        const snapshotQuery = useQuery({
+            ...snapshotProcedure.queryOptions(),
+            enabled,
+        });
         const queryKey = snapshotProcedure.queryKey();
         const snapshotEnvelopeRef = useRef(snapshotQuery.data);
         snapshotEnvelopeRef.current = snapshotQuery.data;

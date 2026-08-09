@@ -10,6 +10,10 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { useCanvas } from "@/core/canvas/client/hooks";
+import {
+    type CanvasPortalStatus,
+    useCanvasPortal,
+} from "@/core/canvas/client/portal/canvas-portal-provider";
 import type {
     CanvasMutationResult,
     CanvasSnapshot,
@@ -34,6 +38,8 @@ export type CanvasPreview = {
 
 export type CanvasControllerValue = {
     projectId: string;
+    portalConfigured: boolean;
+    portalStatus: CanvasPortalStatus;
     snapshot: CanvasSnapshot | undefined;
     isLoading: boolean;
     error: Error | null;
@@ -98,10 +104,12 @@ export function CanvasControllerProvider({
         },
     });
     const canvas = useCanvas();
+    const portal = useCanvasPortal();
     const { snapshotQuery, actions } = canvas.useController({
         projectId,
         userId,
         selection: selectionRef.current,
+        enabled: portal.historyReady,
         onError: () => toast.error("Unable to save canvas change"),
     });
 
@@ -176,6 +184,8 @@ export function CanvasControllerProvider({
 
     const value: CanvasControllerValue = {
         projectId,
+        portalConfigured: portal.configured,
+        portalStatus: portal.status,
         snapshot: snapshotQuery.data?.response,
         isLoading: snapshotQuery.isPending,
         error: snapshotQuery.isError

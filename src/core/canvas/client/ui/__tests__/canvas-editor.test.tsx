@@ -41,6 +41,8 @@ const flowMock = vi.hoisted(() => ({
 
 const contextMock = vi.hoisted(() => ({
     projectId: "550e8400-e29b-41d4-a716-446655440000",
+    portalConfigured: false,
+    portalStatus: "unavailable" as const,
     snapshot: null as CanvasControllerValue["snapshot"] | null,
     isLoading: false,
     error: null as Error | null,

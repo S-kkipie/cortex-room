@@ -13,6 +13,8 @@ import type {
     operationVersionSchema,
     participantPresenceMetadataSchema,
     portalMessageTypeSchema,
+    portalTokenEnvelopeSchema,
+    portalTokenResponseSchema,
     resizeElementCommandSchema,
     updateElementCommandSchema,
     wireTimestampSchema,
@@ -37,6 +39,8 @@ export type CursorPosition = z.infer<typeof cursorPositionSchema>;
 export type ParticipantPresenceMetadata = z.infer<
     typeof participantPresenceMetadataSchema
 >;
+export type PortalTokenResponse = z.infer<typeof portalTokenResponseSchema>;
+export type PortalTokenEnvelope = z.infer<typeof portalTokenEnvelopeSchema>;
 export type CanvasPortalEvent = z.infer<typeof canvasPortalEventSchema>;
 export type PortalMessageType = z.infer<typeof portalMessageTypeSchema>;
 export type CanvasPortalMessage = z.infer<typeof canvasPortalMessageSchema>;

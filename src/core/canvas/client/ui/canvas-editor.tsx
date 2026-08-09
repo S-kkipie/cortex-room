@@ -26,6 +26,7 @@ import {
 } from "@/core/canvas/client/viewport";
 import type { WorkspaceElementType } from "@/core/canvas/domain/types";
 import { Button } from "@/frontend/components/ui/button";
+import { CanvasConnectionStatus } from "./canvas-connection-status";
 import { CanvasToolbar } from "./canvas-toolbar";
 import { WORKSPACE_NODE_TYPES } from "./workspace-element-node";
 
@@ -188,6 +189,7 @@ export function CanvasEditor({
                 </div>
             ) : null}
             <CanvasToolbar />
+            <CanvasConnectionStatus />
             <ReactFlow
                 aria-label="Canvas"
                 defaultNodes={EMPTY_NODES}

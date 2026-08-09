@@ -31,6 +31,8 @@
         "@elysiajs/server-timing": "^1.4.1",
         "@logtape/elysia": "^2.2.1",
         "@logtape/logtape": "^2.2.1",
+        "@portalsdk/core": "^0.1.5",
+        "@portalsdk/react": "^0.1.4",
         "@t3-oss/env-nextjs": "^0.13.11",
         "@tanstack/react-form": "^1.33.1",
         "@tanstack/react-pacer": "^0.22.1",
@@ -64,6 +66,7 @@
     },
     "devDependencies": {
         "@biomejs/biome": "^2.3.0",
+        "@portalsdk/config": "^0.2.1",
         "@tailwindcss/postcss": "^4",
         "@types/node": "^20",
         "@types/pg": "^8.20.0",
