@@ -1,0 +1,23 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e46]:
+    - banner [ref=f1e47]:
+      - generic [ref=f1e48]: Hackaton Starter
+      - generic [ref=f1e49]:
+        - generic [ref=f1e50]: tester@cortex.local
+        - button "Sign out" [ref=f1e51]
+    - main [ref=f1e52]:
+      - generic [ref=f1e53]:
+        - generic [ref=f1e54]:
+          - generic [ref=f1e55]: Cortex Room
+          - heading "Tus reuniones" [level=1] [ref=f1e63]
+          - paragraph [ref=f1e64]: Cada reunión tiene un canvas colaborativo en vivo. Crea una, invita al agente a tu Google Meet y mira cómo las notas aparecen solas mientras hablan.
+        - generic [ref=f1e65]:
+          - textbox "Nombre de la reunión" [ref=f1e66]:
+            - /placeholder: Nombre de la reunión (ej. Kickoff con cliente)
+          - button "Nueva reunión" [ref=f1e67]
+        - generic [ref=f1e68]:
+          - heading "Aún no hay reuniones" [level=2] [ref=f1e69]
+          - paragraph [ref=f1e70]: Crea tu primera reunión arriba para abrir su canvas.
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=f1e33] [cursor=pointer]
+  - alert [ref=f1e37]: Reuniones
