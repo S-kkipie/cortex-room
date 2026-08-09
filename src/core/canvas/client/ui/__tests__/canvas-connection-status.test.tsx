@@ -16,6 +16,8 @@ const contextMock = vi.hoisted(() => ({
         | "blocked"
         | "unavailable",
     onlineParticipantCount: 0,
+    pendingPublishCount: 0,
+    retryPendingPublishes: vi.fn(),
 }));
 
 vi.mock("@/core/canvas/client/controller/canvas-controller-context", () => ({
@@ -38,6 +40,7 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 afterEach(() => {
     contextMock.portalStatus = "ready";
     contextMock.onlineParticipantCount = 0;
+    contextMock.pendingPublishCount = 0;
     document.body.replaceChildren();
 });
 
@@ -70,6 +73,20 @@ describe("CanvasConnectionStatus", () => {
                 '[data-testid="canvas-connection-status"]',
             )?.textContent,
         ).toContain("· 2");
+        view.unmount();
+    });
+
+    it("shows Unsynced and exposes a manual retry action", () => {
+        contextMock.pendingPublishCount = 1;
+        const view = render(createElement(CanvasConnectionStatus));
+        const status = view.container.querySelector(
+            '[data-testid="canvas-connection-status"]',
+        );
+
+        expect(status?.getAttribute("data-status")).toBe("unsynced");
+        expect(status?.textContent).toContain("Unsynced");
+        status?.querySelector<HTMLButtonElement>("button")?.click();
+        expect(contextMock.retryPendingPublishes).toHaveBeenCalledOnce();
         view.unmount();
     });
 });

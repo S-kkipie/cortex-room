@@ -19,6 +19,7 @@ import {
 } from "./controller/canvas-controller";
 import type { CanvasPreviewPort } from "./controller/canvas-preview";
 import type { CanvasRealtimePort } from "./portal/canvas-portal-events";
+import { retryCanvasPersistence } from "./retry";
 
 type MutationEnvelope = { response: CanvasMutationResult };
 
@@ -109,23 +110,27 @@ export const useCanvas = () => {
         const transport: CanvasTransport = {
             create: async (command) =>
                 (
-                    (await createMutation.mutateAsync(
-                        command,
+                    (await retryCanvasPersistence(() =>
+                        createMutation.mutateAsync(command),
                     )) as MutationEnvelope
                 ).response,
             update: async (command) =>
                 (
-                    (await updateMutation.mutateAsync({
-                        elementId: command.elementId,
-                        command,
-                    })) as MutationEnvelope
+                    (await retryCanvasPersistence(() =>
+                        updateMutation.mutateAsync({
+                            elementId: command.elementId,
+                            command,
+                        }),
+                    )) as MutationEnvelope
                 ).response,
             delete: async (command) =>
                 (
-                    (await deleteMutation.mutateAsync({
-                        elementId: command.elementId,
-                        command,
-                    })) as MutationEnvelope
+                    (await retryCanvasPersistence(() =>
+                        deleteMutation.mutateAsync({
+                            elementId: command.elementId,
+                            command,
+                        }),
+                    )) as MutationEnvelope
                 ).response,
         };
 

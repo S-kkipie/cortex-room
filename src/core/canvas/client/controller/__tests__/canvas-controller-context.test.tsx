@@ -55,6 +55,8 @@ const portalMock = vi.hoisted(() => ({
     presence: undefined,
     me: undefined,
     setMetadata: vi.fn(),
+    sendPersistent: vi.fn(),
+    sendEphemeral: vi.fn(),
 }));
 
 const selectionPortMock = vi.hoisted(() => ({

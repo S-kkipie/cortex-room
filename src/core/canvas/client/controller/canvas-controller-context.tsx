@@ -9,6 +9,7 @@ import {
     useMemo,
     useRef,
     useState,
+    useSyncExternalStore,
 } from "react";
 import { toast } from "sonner";
 import { useCanvas } from "@/core/canvas/client/hooks";
@@ -16,6 +17,11 @@ import {
     type CanvasRemoteParticipant,
     normalizeCanvasAwareness,
 } from "@/core/canvas/client/portal/canvas-awareness";
+import { createCanvasMessageBuffer } from "@/core/canvas/client/portal/canvas-message-buffer";
+import {
+    type CanvasPersistentOutbox,
+    createCanvasPersistentOutbox,
+} from "@/core/canvas/client/portal/canvas-persistent-outbox";
 import {
     type CanvasPortalStatus,
     useCanvasPortal,
@@ -57,6 +63,9 @@ export type CanvasControllerValue = {
     remoteParticipants: readonly CanvasRemoteParticipant[];
     remoteCursors: ReadonlyMap<string, CursorPosition>;
     remoteSelections: ReadonlyMap<string, readonly string[]>;
+    pendingPublishCount: number;
+    hasUnsyncedChanges: boolean;
+    retryPendingPublishes(): void;
     setMovePreview(elementId: string, preview: { x: number; y: number }): void;
     setResizePreview(
         elementId: string,
@@ -103,6 +112,8 @@ export function CanvasControllerProvider({
         typeof setTimeout
     > | null>(null);
     const selectionInitializedRef = useRef(false);
+    const messageBuffer = useMemo(() => createCanvasMessageBuffer(), []);
+    const messageBufferProjectRef = useRef(projectId);
     const selectionRef = useRef<CanvasSelectionPort>({
         read: () => selectedElementIdsRef.current,
         write: (elementIds) => {
@@ -143,12 +154,31 @@ export function CanvasControllerProvider({
     );
     const canvas = useCanvas();
     const portal = useCanvasPortal();
+    const persistentSendRef = useRef(portal.sendPersistent);
+    const ephemeralSendRef = useRef(portal.sendEphemeral);
+    persistentSendRef.current = portal.sendPersistent;
+    ephemeralSendRef.current = portal.sendEphemeral;
+    const persistentOutbox = useMemo<CanvasPersistentOutbox>(
+        () =>
+            createCanvasPersistentOutbox({
+                send: (message) => persistentSendRef.current(message),
+            }),
+        [],
+    );
+    const outboxSnapshot = useSyncExternalStore(
+        persistentOutbox.subscribe,
+        persistentOutbox.getSnapshot,
+        persistentOutbox.getSnapshot,
+    );
+    const persistentOutboxProjectRef = useRef(projectId);
     const realtime = useMemo(
         () => ({
-            publishPersistent: portal.sendPersistent,
-            publishEphemeral: portal.sendEphemeral,
+            publishPersistent: persistentOutbox.enqueue,
+            publishEphemeral: (
+                message: Parameters<typeof portal.sendEphemeral>[0],
+            ) => ephemeralSendRef.current(message),
         }),
-        [portal.sendEphemeral, portal.sendPersistent],
+        [persistentOutbox],
     );
     const awareness = useMemo(
         () =>
@@ -171,11 +201,44 @@ export function CanvasControllerProvider({
     });
 
     useEffect(() => {
-        if (!snapshotQuery.data?.response) return;
-        for (const message of portal.messages) {
+        if (persistentOutboxProjectRef.current === projectId) return;
+        persistentOutbox.reset();
+        persistentOutboxProjectRef.current = projectId;
+    }, [persistentOutbox, projectId]);
+
+    useEffect(() => {
+        if (
+            portal.status === "idle" ||
+            portal.status === "connecting" ||
+            portal.status === "blocked" ||
+            portal.status === "unavailable"
+        ) {
+            return;
+        }
+        persistentOutbox.flush({ retryFailed: true });
+    }, [persistentOutbox, portal.status]);
+
+    useEffect(() => () => persistentOutbox.dispose(), [persistentOutbox]);
+
+    useEffect(() => {
+        if (messageBufferProjectRef.current === projectId) return;
+        messageBuffer.clear();
+        messageBufferProjectRef.current = projectId;
+    }, [messageBuffer, projectId]);
+
+    useEffect(() => {
+        if (!snapshotQuery.data?.response) {
+            messageBuffer.appendAll(portal.messages);
+            return;
+        }
+
+        const bufferedMessages = messageBuffer.drain();
+        for (const message of [...bufferedMessages, ...portal.messages]) {
             actions.applyRemoteMessage(message);
         }
-    }, [actions, portal.messages, snapshotQuery.data?.response]);
+    }, [actions, messageBuffer, portal.messages, snapshotQuery.data?.response]);
+
+    useEffect(() => () => messageBuffer.clear(), [messageBuffer]);
 
     useEffect(() => {
         if (!selectionInitializedRef.current) {
@@ -341,6 +404,10 @@ export function CanvasControllerProvider({
         remoteParticipants: awareness.participants,
         remoteCursors: awareness.cursors,
         remoteSelections: awareness.selections,
+        pendingPublishCount: outboxSnapshot.pendingCount,
+        hasUnsyncedChanges: outboxSnapshot.pendingCount > 0,
+        retryPendingPublishes: () =>
+            persistentOutbox.flush({ retryFailed: true }),
         setMovePreview,
         setResizePreview,
         clearPreview,
