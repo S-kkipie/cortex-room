@@ -114,7 +114,7 @@ function ConnectedCanvasPortal({
     projectId,
     children,
 }: PropsWithChildren<{ projectId: string }>) {
-    const channelId = `room-${projectId}`;
+    const channelId = `canvas-${projectId}`;
     const channel = useChannel<CanvasPortalMessage>({
         channelId,
         history: PORTAL_HISTORY_SIZE,
