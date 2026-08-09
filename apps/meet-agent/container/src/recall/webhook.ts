@@ -12,8 +12,14 @@ export async function handleRecallWebhook(args: {
 }): Promise<{ status: 200 | 401; events: AgentEvent[]; webhookId: string | null; anchorT0Ms: number | null }> {
     const { rawBody, headers, secret, t0Ms, meetingId, genId } = args;
 
-    const ok = await verifyRecallSignature({ secret, headers, rawBody });
-    if (!ok) return { status: 401, events: [], webhookId: null, anchorT0Ms: null };
+    // Signature enforcement is opt-in: with no configured secret the endpoint
+    // accepts unsigned realtime webhooks (demo posture — the meeting id in the
+    // URL is the only guard). Set RECALL_WEBHOOK_SECRET to require valid svix
+    // signatures and reject everything else.
+    if (secret) {
+        const ok = await verifyRecallSignature({ secret, headers, rawBody });
+        if (!ok) return { status: 401, events: [], webhookId: null, anchorT0Ms: null };
+    }
 
     const webhookId = headers["webhook-id"] ?? headers["svix-id"] ?? null;
 

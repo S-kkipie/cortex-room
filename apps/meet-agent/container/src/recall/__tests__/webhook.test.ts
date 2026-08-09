@@ -60,6 +60,12 @@ describe("handleRecallWebhook", () => {
         expect(res.events).toEqual([]);
     });
 
+    it("skips signature verification when no secret is configured", async () => {
+        const body = JSON.stringify({ event: "transcript.data", data: { data: { words: [], participant: null } } });
+        const res = await handleRecallWebhook({ ...base, secret: "", rawBody: body, headers: {} });
+        expect(res.status).toBe(200);
+    });
+
     it("returns 200 with no events on malformed JSON", async () => {
         const body = "{not json";
         const headers = { "webhook-id": "w3", "webhook-timestamp": "1", "webhook-signature": await sign("w3", "1", body) };
