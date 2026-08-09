@@ -1,17 +1,22 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { NavigableCanvas } from "@/core/canvas/client/ui/navigable-canvas";
 import { SignOutButton } from "@/frontend/components/auth/sign-out-button";
 import { Button } from "@/frontend/components/ui/button";
 
 export function CanvasShell({
+    projectId,
+    userId,
     projectName,
     userLabel,
 }: {
+    projectId: string;
+    userId: string;
     projectName: string;
     userLabel: string;
 }) {
     return (
-        <div className="flex min-h-svh flex-col bg-muted/20">
+        <div className="flex h-svh flex-col bg-muted/20">
             <header className="flex min-h-14 items-center gap-3 border-b bg-background px-4 py-2 sm:px-6">
                 <Button
                     asChild
@@ -40,13 +45,8 @@ export function CanvasShell({
                     <SignOutButton />
                 </div>
             </header>
-            <main className="flex min-h-0 flex-1 items-center justify-center p-4">
-                <section className="w-full max-w-md rounded-xl border border-dashed bg-background p-8 text-center shadow-sm">
-                    <h2 className="font-semibold text-lg">Workspace ready</h2>
-                    <p className="mt-2 text-muted-foreground text-sm">
-                        Canvas tools will appear here.
-                    </p>
-                </section>
+            <main className="relative flex min-h-0 flex-1 overflow-hidden">
+                <NavigableCanvas projectId={projectId} userId={userId} />
             </main>
         </div>
     );

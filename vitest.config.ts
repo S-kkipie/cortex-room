@@ -13,11 +13,13 @@ export default defineConfig({
     test: {
         environment: "node",
         globals: true,
-        include: ["src/**/__tests__/**/*.test.ts"],
+        include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
         env: {
             DATABASE_URL: "postgres://user:pass@localhost:5432/app",
             BETTER_AUTH_SECRET: "test-secret-least-thirty-two-chars-long",
             NEXT_PUBLIC_APP_URL: "http://localhost:3000",
+            PORTAL_SECRET_KEY: "sk_test_canvas",
+            NEXT_PUBLIC_PORTAL_API_KEY: "pk_test_canvas",
         },
     },
 });

@@ -1,0 +1,496 @@
+"use client";
+
+import type { PropsWithChildren } from "react";
+import {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from "react";
+import { toast } from "sonner";
+import { useCanvas } from "@/core/canvas/client/hooks";
+import {
+    type CanvasRemoteParticipant,
+    normalizeCanvasAwareness,
+} from "@/core/canvas/client/portal/canvas-awareness";
+import { createCanvasMessageBuffer } from "@/core/canvas/client/portal/canvas-message-buffer";
+import {
+    type CanvasPersistentOutbox,
+    createCanvasPersistentOutbox,
+} from "@/core/canvas/client/portal/canvas-persistent-outbox";
+import {
+    type CanvasPortalStatus,
+    useCanvasPortal,
+} from "@/core/canvas/client/portal/canvas-portal-provider";
+import { PRESENCE_METADATA_THROTTLE_MS } from "@/core/canvas/domain/schemas";
+import type {
+    CanvasMutationResult,
+    CanvasSnapshot,
+    CursorPosition,
+    ParticipantElementPreview,
+    ParticipantPresenceMetadata,
+} from "@/core/canvas/domain/types";
+import type { CanvasActions, CanvasSelectionPort } from "./canvas-controller";
+import type { CanvasPreview, CanvasPreviewPort } from "./canvas-preview";
+
+export type CanvasTool =
+    | "select"
+    | "hand"
+    | "STICKY"
+    | "TEXT"
+    | "CARD"
+    | "HEADING"
+    | "delete";
+
+export type CanvasControllerValue = {
+    projectId: string;
+    portalConfigured: boolean;
+    portalStatus: CanvasPortalStatus;
+    snapshot: CanvasSnapshot | undefined;
+    isLoading: boolean;
+    error: Error | null;
+    retry(): void;
+    actions: CanvasActions;
+    activeTool: CanvasTool;
+    setActiveTool(tool: CanvasTool): void;
+    selectedElementIds: string[];
+    editingElementId: string | null;
+    textDrafts: Record<string, string>;
+    previews: ReadonlyMap<string, CanvasPreview>;
+    onlineParticipantCount: number;
+    remoteParticipants: readonly CanvasRemoteParticipant[];
+    remoteCursors: ReadonlyMap<string, CursorPosition>;
+    remoteSelections: ReadonlyMap<string, readonly string[]>;
+    pendingPublishCount: number;
+    hasUnsyncedChanges: boolean;
+    retryPendingPublishes(): void;
+    setMovePreview(elementId: string, preview: { x: number; y: number }): void;
+    setResizePreview(
+        elementId: string,
+        preview: { width: number; height: number },
+    ): void;
+    clearPreview(elementId: string): void;
+    getPreview(elementId: string): CanvasPreview | undefined;
+    beginEditing(elementId: string): void;
+    setTextDraft(elementId: string, content: string): void;
+    publishCursor(cursor: CursorPosition): void;
+    confirmEditing(
+        elementId: string,
+    ): Promise<CanvasMutationResult | undefined>;
+    cancelEditing(elementId: string): void;
+    fitViewHasRun: boolean;
+    markFitViewComplete(): void;
+};
+
+const CanvasControllerContext = createContext<CanvasControllerValue | null>(
+    null,
+);
+
+export function CanvasControllerProvider({
+    projectId,
+    userId,
+    children,
+}: PropsWithChildren<{ projectId: string; userId: string }>) {
+    const [activeTool, setActiveTool] = useState<CanvasTool>("select");
+    const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
+    const [editingElementId, setEditingElementId] = useState<string | null>(
+        null,
+    );
+    const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
+    const [previews, setPreviews] = useState<Map<string, CanvasPreview>>(
+        () => new Map(),
+    );
+    const [localCursor, setLocalCursor] = useState<CursorPosition | undefined>(
+        undefined,
+    );
+    const [localPreview, setLocalPreview] = useState<
+        ParticipantElementPreview | undefined
+    >(undefined);
+    const [fitViewHasRun, setFitViewHasRun] = useState(false);
+    const pendingTextCommitsRef = useRef(new Set<string>());
+    const selectedElementIdsRef = useRef(selectedElementIds);
+    const presenceMetadataTimerRef = useRef<ReturnType<
+        typeof setTimeout
+    > | null>(null);
+    const pendingPresenceMetadataRef =
+        useRef<ParticipantPresenceMetadata | null>(null);
+    const lastPresenceMetadataSentAtRef = useRef(Date.now());
+    const presenceMetadataProjectRef = useRef(projectId);
+    const selectionInitializedRef = useRef(false);
+    const messageBuffer = useMemo(() => createCanvasMessageBuffer(), []);
+    const messageBufferProjectRef = useRef(projectId);
+    const selectionRef = useRef<CanvasSelectionPort>({
+        read: () => selectedElementIdsRef.current,
+        write: (elementIds) => {
+            const next = [...elementIds];
+            const current = selectedElementIdsRef.current;
+            if (
+                current.length === next.length &&
+                current.every((elementId, index) => elementId === next[index])
+            ) {
+                return;
+            }
+            selectedElementIdsRef.current = next;
+            setSelectedElementIds(next);
+        },
+    });
+    const previewPort = useMemo<CanvasPreviewPort>(
+        () => ({
+            set: (elementId, preview) => {
+                setPreviews((current) => {
+                    const next = new Map(current);
+                    next.set(elementId, {
+                        ...current.get(elementId),
+                        ...preview,
+                    });
+                    return next;
+                });
+            },
+            clear: (elementId) => {
+                setPreviews((current) => {
+                    if (!current.has(elementId)) return current;
+                    const next = new Map(current);
+                    next.delete(elementId);
+                    return next;
+                });
+            },
+        }),
+        [],
+    );
+    const canvas = useCanvas();
+    const portal = useCanvasPortal();
+    const setMetadataRef = useRef(portal.setMetadata);
+    setMetadataRef.current = portal.setMetadata;
+    const persistentSendRef = useRef(portal.sendPersistent);
+    const ephemeralSendRef = useRef(portal.sendEphemeral);
+    persistentSendRef.current = portal.sendPersistent;
+    ephemeralSendRef.current = portal.sendEphemeral;
+    const persistentOutbox = useMemo<CanvasPersistentOutbox>(
+        () =>
+            createCanvasPersistentOutbox({
+                send: (message) => persistentSendRef.current(message),
+            }),
+        [],
+    );
+    const outboxSnapshot = useSyncExternalStore(
+        persistentOutbox.subscribe,
+        persistentOutbox.getSnapshot,
+        persistentOutbox.getSnapshot,
+    );
+    const persistentOutboxProjectRef = useRef(projectId);
+    const realtime = useMemo(
+        () => ({
+            publishPersistent: persistentOutbox.enqueue,
+            publishEphemeral: (
+                message: Parameters<typeof portal.sendEphemeral>[0],
+            ) => ephemeralSendRef.current(message),
+        }),
+        [persistentOutbox],
+    );
+    const awareness = useMemo(
+        () =>
+            normalizeCanvasAwareness(
+                portal.presence,
+                portal.messages,
+                projectId,
+                portal.me?.id,
+            ),
+        [portal.me?.id, portal.messages, portal.presence, projectId],
+    );
+    const { snapshotQuery, actions } = canvas.useController({
+        projectId,
+        userId,
+        selection: selectionRef.current,
+        previews: previewPort,
+        realtime,
+        enabled: portal.historyReady,
+        onError: () => toast.error("Unable to save canvas change"),
+    });
+
+    useEffect(() => {
+        if (persistentOutboxProjectRef.current === projectId) return;
+        persistentOutbox.reset();
+        persistentOutboxProjectRef.current = projectId;
+    }, [persistentOutbox, projectId]);
+
+    useEffect(() => {
+        if (
+            portal.status === "idle" ||
+            portal.status === "connecting" ||
+            portal.status === "blocked" ||
+            portal.status === "unavailable"
+        ) {
+            return;
+        }
+        persistentOutbox.flush({ retryFailed: true });
+    }, [persistentOutbox, portal.status]);
+
+    useEffect(() => () => persistentOutbox.dispose(), [persistentOutbox]);
+
+    useEffect(() => {
+        if (messageBufferProjectRef.current === projectId) return;
+        messageBuffer.clear();
+        messageBufferProjectRef.current = projectId;
+    }, [messageBuffer, projectId]);
+
+    useEffect(() => {
+        if (!snapshotQuery.data?.response) {
+            messageBuffer.appendAll(portal.messages);
+            return;
+        }
+
+        const bufferedMessages = messageBuffer.drain();
+        for (const message of [...bufferedMessages, ...portal.messages]) {
+            actions.applyRemoteMessage(message);
+        }
+    }, [actions, messageBuffer, portal.messages, snapshotQuery.data?.response]);
+
+    useEffect(() => () => messageBuffer.clear(), [messageBuffer]);
+
+    useEffect(() => {
+        if (!selectionInitializedRef.current) {
+            selectionInitializedRef.current = true;
+            return;
+        }
+        actions.publishSelection(selectedElementIds);
+    }, [actions, selectedElementIds]);
+
+    useEffect(() => {
+        if (presenceMetadataProjectRef.current === projectId) return;
+        presenceMetadataProjectRef.current = projectId;
+        if (presenceMetadataTimerRef.current) {
+            clearTimeout(presenceMetadataTimerRef.current);
+            presenceMetadataTimerRef.current = null;
+        }
+        pendingPresenceMetadataRef.current = null;
+        lastPresenceMetadataSentAtRef.current = Date.now();
+        setLocalCursor(undefined);
+        setLocalPreview(undefined);
+    }, [projectId]);
+
+    useEffect(() => {
+        if (!portal.configured) {
+            if (presenceMetadataTimerRef.current) {
+                clearTimeout(presenceMetadataTimerRef.current);
+                presenceMetadataTimerRef.current = null;
+            }
+            pendingPresenceMetadataRef.current = null;
+            return;
+        }
+
+        pendingPresenceMetadataRef.current = {
+            ...(localCursor ? { cursor: localCursor } : {}),
+            selectedElementIds,
+            ...(localPreview ? { preview: localPreview } : {}),
+        } satisfies ParticipantPresenceMetadata;
+
+        const flush = () => {
+            presenceMetadataTimerRef.current = null;
+            const metadata = pendingPresenceMetadataRef.current;
+            if (!metadata) return;
+            pendingPresenceMetadataRef.current = null;
+            lastPresenceMetadataSentAtRef.current = Date.now();
+            setMetadataRef.current(metadata);
+        };
+        const elapsed = Date.now() - lastPresenceMetadataSentAtRef.current;
+        if (
+            !presenceMetadataTimerRef.current &&
+            elapsed >= PRESENCE_METADATA_THROTTLE_MS
+        ) {
+            flush();
+            return;
+        }
+        if (!presenceMetadataTimerRef.current) {
+            presenceMetadataTimerRef.current = setTimeout(
+                flush,
+                Math.max(0, PRESENCE_METADATA_THROTTLE_MS - elapsed),
+            );
+        }
+    }, [localCursor, localPreview, portal.configured, selectedElementIds]);
+
+    useEffect(
+        () => () => {
+            if (presenceMetadataTimerRef.current) {
+                clearTimeout(presenceMetadataTimerRef.current);
+                presenceMetadataTimerRef.current = null;
+            }
+            pendingPresenceMetadataRef.current = null;
+        },
+        [],
+    );
+
+    useEffect(() => () => actions.cancelAllPreviews(), [actions]);
+
+    const setPreview = previewPort.set;
+
+    const clearPreview = useCallback(
+        (elementId: string) => {
+            actions.cancelPreviews(elementId);
+            previewPort.clear(elementId);
+            setLocalPreview((current) =>
+                current?.elementId === elementId ? undefined : current,
+            );
+        },
+        [actions, previewPort],
+    );
+
+    const setMovePreview = useCallback(
+        (elementId: string, preview: { x: number; y: number }) => {
+            setPreview(elementId, preview);
+            setLocalPreview({ kind: "move", elementId, ...preview });
+            actions.publishMovePreview(elementId, preview);
+        },
+        [actions, setPreview],
+    );
+
+    const setResizePreview = useCallback(
+        (elementId: string, preview: { width: number; height: number }) => {
+            setPreview(elementId, preview);
+            setLocalPreview({ kind: "resize", elementId, ...preview });
+            actions.publishResizePreview(elementId, preview);
+        },
+        [actions, setPreview],
+    );
+
+    const markFitViewComplete = useCallback(() => setFitViewHasRun(true), []);
+
+    const beginEditing = useCallback(
+        (elementId: string) => {
+            const element = actions.getElement(elementId);
+            if (!element) return;
+            setEditingElementId(elementId);
+            setTextDrafts((current) => ({
+                ...current,
+                [elementId]: element.content,
+            }));
+        },
+        [actions],
+    );
+
+    const setTextDraft = useCallback(
+        (elementId: string, content: string) => {
+            setTextDrafts((current) => ({ ...current, [elementId]: content }));
+            setLocalPreview({ kind: "text", elementId, content });
+            actions.publishTextPreview(elementId, content);
+        },
+        [actions],
+    );
+
+    const publishCursor = useCallback(
+        (cursor: CursorPosition) => {
+            setLocalCursor(cursor);
+            actions.publishCursor(cursor);
+        },
+        [actions],
+    );
+
+    const clearEditing = useCallback((elementId: string) => {
+        setLocalPreview((current) =>
+            current?.elementId === elementId ? undefined : current,
+        );
+        setEditingElementId((current) =>
+            current === elementId ? null : current,
+        );
+        setTextDrafts((current) => {
+            if (!(elementId in current)) return current;
+            const next = { ...current };
+            delete next[elementId];
+            return next;
+        });
+    }, []);
+
+    const confirmEditing = useCallback(
+        async (elementId: string) => {
+            if (pendingTextCommitsRef.current.has(elementId)) return undefined;
+            const element = actions.getElement(elementId);
+            const draft = textDrafts[elementId];
+            if (!element || draft === undefined) return undefined;
+
+            actions.cancelPreviews(elementId);
+            if (draft === element.content) {
+                clearEditing(elementId);
+                return undefined;
+            }
+
+            pendingTextCommitsRef.current.add(elementId);
+            try {
+                const result = await actions.updateElement(elementId, {
+                    content: draft,
+                });
+                clearEditing(elementId);
+                return result;
+            } finally {
+                pendingTextCommitsRef.current.delete(elementId);
+            }
+        },
+        [actions, clearEditing, textDrafts],
+    );
+
+    const cancelEditing = useCallback(
+        (elementId: string) => {
+            actions.cancelPreviews(elementId);
+            clearEditing(elementId);
+        },
+        [actions, clearEditing],
+    );
+
+    const value: CanvasControllerValue = {
+        projectId,
+        portalConfigured: portal.configured,
+        portalStatus: portal.status,
+        snapshot: snapshotQuery.data?.response,
+        isLoading: snapshotQuery.isPending,
+        error: snapshotQuery.isError
+            ? snapshotQuery.error instanceof Error
+                ? snapshotQuery.error
+                : new Error("Unable to load canvas")
+            : null,
+        retry: () => void snapshotQuery.refetch(),
+        actions,
+        activeTool,
+        setActiveTool,
+        selectedElementIds,
+        editingElementId,
+        textDrafts,
+        previews,
+        onlineParticipantCount: awareness.onlineCount,
+        remoteParticipants: awareness.participants,
+        remoteCursors: awareness.cursors,
+        remoteSelections: awareness.selections,
+        pendingPublishCount: outboxSnapshot.pendingCount,
+        hasUnsyncedChanges: outboxSnapshot.pendingCount > 0,
+        retryPendingPublishes: () =>
+            persistentOutbox.flush({ retryFailed: true }),
+        setMovePreview,
+        setResizePreview,
+        clearPreview,
+        getPreview: (elementId) => previews.get(elementId),
+        beginEditing,
+        setTextDraft,
+        publishCursor,
+        confirmEditing,
+        cancelEditing,
+        fitViewHasRun,
+        markFitViewComplete,
+    };
+
+    return (
+        <CanvasControllerContext.Provider value={value}>
+            {children}
+        </CanvasControllerContext.Provider>
+    );
+}
+
+export function useCanvasController(): CanvasControllerValue {
+    const context = useContext(CanvasControllerContext);
+    if (!context) {
+        throw new Error(
+            "useCanvasController must be used inside CanvasControllerProvider",
+        );
+    }
+    return context;
+}

@@ -4,6 +4,8 @@ export const ServerConfig = {
     databaseURL: env.DATABASE_URL,
     baseUrl: env.NEXT_PUBLIC_APP_URL,
     betterAuthSecret: env.BETTER_AUTH_SECRET,
+    portalSecretKey: env.PORTAL_SECRET_KEY,
+    portalApiUrl: "https://api.useportal.co",
     info: {
         name: "Hackaton Starter API",
         version: "1.0.0",

@@ -19,6 +19,8 @@ export default async function CanvasPage({
 
     return (
         <CanvasShell
+            projectId={projectId}
+            userId={user.id}
             projectName={result.data.name}
             userLabel={user.name?.trim() || user.email}
         />

@@ -9,6 +9,6 @@ const { EdenProvider, useEden } = createEdenTanStackQuery<AppRouter>();
 /** Typed options proxy rooted at /api/v1. Bind one domain, then hang calls off it. */
 const useElysia = () => useEden().api.v1;
 
-const apiClient = treaty<AppRouter>(BASE_URL);
+const apiClient = treaty<AppRouter>(BASE_URL, { parseDate: false });
 
 export { apiClient, EdenProvider, useElysia };
