@@ -31,7 +31,8 @@ What survives from v2: the event **contract** (`contract/events.ts`), the **Even
 - **Real-time transport:** webhook (`type: "webhook"`, HTTP POST to your `url`) or websocket (`type: "websocket"`, `wss://`). We use **webhook** — simplest fit for a Cloudflare Worker (receive POST, return 2xx).
 - **Transcription provider:** set `recording_config.transcript.provider`. We use `recallai_streaming` (`mode: "prioritize_low_latency"`) — no extra STT key, low latency. AssemblyAI-via-Recall (`assembly_ai_v3_streaming`) is a config swap if wanted later.
 - **Required for live transcripts:** both `transcript.provider` AND a `realtime_endpoints` entry listing `transcript.data`. Missing either → no utterances.
-- **Events we subscribe to:** `transcript.data` (finalized utterance), `participant_events.join`, `participant_events.leave`, `participant_events.speech_on`, `participant_events.speech_off`.
+- **Events we subscribe to (6):** `transcript.data`, `participant_events.join`, `participant_events.leave`, `participant_events.update`, `participant_events.speech_on`, `participant_events.speech_off`.
+- **Confirmed config:** region `us-west-2`, provider `recallai_streaming` (`mode: "prioritize_low_latency"`), transport **webhook**.
 - **`transcript.data` payload** (`data.data`): `words: [{text, start_timestamp:{relative}, end_timestamp:{relative}|null}]`, `language_code`, `participant: {id:int, name:string|null, is_host, platform, email}`. **Speaker is already attributed** — no diarization/correlation needed.
 - **`participant_events.*` payload** (`data.data`): `participant {id, name, is_host, platform, email}`, `timestamp: {absolute: ISO8601, relative: float}`.
 - **Verification:** with a workspace verification secret (`whsec_...`), every request carries `webhook-id`, `webhook-timestamp`, `webhook-signature` headers. Signature = base64 HMAC-SHA256 over `"{id}.{timestamp}.{rawBody}"`, key = base64-decoded secret body. `webhook-signature` is space-separated `v1,<sig>` entries; accept if any matches (constant-time compare).
@@ -94,11 +95,14 @@ The contract types (`Participant`, `TranscriptSegment`, `AgentEvent`) are unchan
 | `transcript.partial_data` (optional, phase 2) | `transcript.segment` with `isFinal:false` — deferred; MVP consumes finals only |
 | `participant_events.join` | `participant.joined` — `participant` from payload, `at` = `timestamp.absolute` |
 | `participant_events.leave` | `participant.left` — `participantId` = `String(participant.id)`, `at` = `timestamp.absolute` |
-| `participant_events.speech_on`/`speech_off` | not mapped to canvas events in MVP (bonus live-speaker signal); may drive a future `speaker.active` event |
+| `participant_events.update` | `participant.joined` again (idempotent upsert of the same participant, now with email/updated fields) — consumers treat a repeat `participant.joined` as an upsert by `participantId` |
+| `participant_events.speech_on`/`speech_off` | `speaker.active` — `{type:"speaker.active", participantId, active:boolean, at}` — the live active-speaker signal we could not scrape from the DOM, now resolved by Recall |
 | bot start-of-recording (session t0 established) | `session.started` |
 | bot leaves / meeting ends | `session.ended` |
 
 `resolved` (unused by v2) is now the primary identity level. `unresolved` remains only for a `transcript.data` with a null participant.
+
+The contract gains one new `AgentEvent` variant, `speaker.active` (`{type, participantId, active, at}`), additive to the existing five. All other contract shapes are unchanged.
 
 ## 7. Testing API (Worker routes)
 
