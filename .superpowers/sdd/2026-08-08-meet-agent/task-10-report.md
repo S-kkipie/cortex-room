@@ -20,7 +20,7 @@
 
 ## Commit
 
-Commit hash: `9a32eec`.
+Implementation commit hash: `9968742`.
 
 ## Concerns
 
