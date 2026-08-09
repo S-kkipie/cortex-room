@@ -12,6 +12,7 @@ import { Spinner } from "@/frontend/components/ui/spinner";
 export type ProviderButtonProps = {
     provider: SocialProvider;
     display?: "full" | "name" | "icon";
+    redirectTo?: string;
 } & Omit<ComponentProps<typeof Button>, "onClick" | "children" | "disabled">;
 
 /**
@@ -23,11 +24,18 @@ export type ProviderButtonProps = {
 export function ProviderButton({
     provider,
     display = "full",
+    redirectTo: redirectToOverride,
     variant = "outline",
     ...props
 }: ProviderButtonProps) {
-    const { authClient, baseURL, localization, redirectTo } = useAuth();
+    const {
+        authClient,
+        baseURL,
+        localization,
+        redirectTo: providerRedirectTo,
+    } = useAuth();
 
+    const redirectTo = redirectToOverride ?? providerRedirectTo;
     const callbackURL = `${baseURL}${redirectTo}`;
 
     const { mutate: signInSocial, isPending: signInSocialPending } =

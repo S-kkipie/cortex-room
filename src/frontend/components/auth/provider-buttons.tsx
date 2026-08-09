@@ -7,6 +7,7 @@ import { cn } from "@/frontend/lib/utils";
 import { ProviderButton } from "./provider-button";
 
 export type ProviderButtonsProps = {
+    redirectTo?: string;
     socialLayout?: SocialLayout;
 };
 
@@ -19,6 +20,7 @@ export type SocialLayout = "auto" | "horizontal" | "vertical" | "grid";
  * @param socialLayout - Preferred layout for the provider buttons; `"auto"` chooses based on the number of providers.
  */
 export function ProviderButtons({
+    redirectTo,
     socialLayout = "auto",
 }: ProviderButtonsProps) {
     const { socialProviders } = useAuth();
@@ -49,6 +51,7 @@ export function ProviderButtons({
                 <ProviderButton
                     key={provider}
                     provider={provider}
+                    redirectTo={redirectTo}
                     display={
                         resolvedSocialLayout === "vertical"
                             ? "full"

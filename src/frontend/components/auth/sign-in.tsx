@@ -27,11 +27,13 @@ import {
 import { Input } from "@/frontend/components/ui/input";
 import { Label } from "@/frontend/components/ui/label";
 import { Spinner } from "@/frontend/components/ui/spinner";
+import { withReturnTo } from "@/frontend/auth/return-to";
 import { cn } from "@/frontend/lib/utils";
 import { ProviderButtons, type SocialLayout } from "./provider-buttons";
 
 export type SignInProps = {
     className?: string;
+    redirectTo?: string;
     socialLayout?: SocialLayout;
     socialPosition?: "top" | "bottom";
 };
@@ -46,6 +48,7 @@ export type SignInProps = {
  */
 export function SignIn({
     className,
+    redirectTo: redirectToOverride,
     socialLayout,
     socialPosition = "bottom",
 }: SignInProps) {
@@ -55,12 +58,13 @@ export function SignIn({
         emailAndPassword,
         localization,
         plugins,
-        redirectTo,
+        redirectTo: providerRedirectTo,
         socialProviders,
         viewPaths,
         navigate,
         Link,
     } = useAuth();
+    const redirectTo = redirectToOverride ?? providerRedirectTo;
 
     const { fetchOptions, resetFetchOptions } = useFetchOptions();
 
@@ -136,7 +140,10 @@ export function SignIn({
                     {socialPosition === "top" && (
                         <>
                             {socialProviders && socialProviders.length > 0 && (
-                                <ProviderButtons socialLayout={socialLayout} />
+                                <ProviderButtons
+                                    redirectTo={redirectTo}
+                                    socialLayout={socialLayout}
+                                />
                             )}
 
                             {showSeparator && (
@@ -313,7 +320,10 @@ export function SignIn({
                             )}
 
                             {socialProviders && socialProviders.length > 0 && (
-                                <ProviderButtons socialLayout={socialLayout} />
+                                <ProviderButtons
+                                    redirectTo={redirectTo}
+                                    socialLayout={socialLayout}
+                                />
                             )}
                         </>
                     )}
@@ -334,7 +344,10 @@ export function SignIn({
                         <FieldDescription className="text-center">
                             {localization.auth.needToCreateAnAccount}{" "}
                             <Link
-                                href={`${basePaths.auth}/${viewPaths.auth.signUp}`}
+                                href={withReturnTo(
+                                    `${basePaths.auth}/${viewPaths.auth.signUp}`,
+                                    redirectTo,
+                                )}
                                 className="underline underline-offset-4"
                             >
                                 {localization.auth.signUp}
