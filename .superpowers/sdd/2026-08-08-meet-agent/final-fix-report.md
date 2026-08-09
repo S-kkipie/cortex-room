@@ -34,7 +34,17 @@ Full `cd apps/meet-agent && pnpm test` output:
  ✓ container/src/emit/__tests__/buffer.test.ts (2 tests) 3ms
 stderr | container/src/emit/__tests__/portal.test.ts > createPortalPublisher > does not throw when the underlying send fails
 [portal] publish failed (continuing): Error: network
-    at container/src/emit/__tests__/portal.test.ts:6:48
+    at /home/skkippie/work/AI-DO/cortex-room/.claude/worktrees/meet-agent/apps/meet-agent/container/src/emit/__tests__/portal.test.ts:6:48
+    at file:///home/skkippie/work/AI-DO/cortex-room/.claude/worktrees/meet-agent/apps/meet-agent/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///home/skkippie/work/AI-DO/cortex-room/.claude/worktrees/meet-agent/apps/meet-agent/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///home/skkippie/work/AI-DO/cortex-room/.claude/worktrees/meet-agent/apps/meet-agent/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///home/skkippie/work/AI-DO/cortex-room/.claude/worktrees/meet-agent/apps/meet-agent/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file:///home/skkippie/work/AI-DO/cortex-room/.claude/worktrees/meet-agent/apps/meet-agent/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at runSuite (file:///home/skkippie/work/AI-DO/cortex-room/.claude/worktrees/meet-agent/apps/meet-agent/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runSuite (file:///home/skkippie/work/AI-DO/cortex-room/.claude/worktrees/meet-agent/apps/meet-agent/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+
 
  ✓ container/src/emit/__tests__/portal.test.ts (1 test) 7ms
  ✓ worker/__tests__/router.test.ts (5 tests) 11ms
