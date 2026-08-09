@@ -10,7 +10,7 @@ describe("EventBuffer", () => {
         b.append(ev("t2"));
         const res = b.since(c1);
         expect(res.events).toHaveLength(1);
-        expect(res.events[0].at).toBe("t2");
+        expect((res.events[0] as { at: string }).at).toBe("t2");
     });
 
     it("notifies subscribers and can unsubscribe", () => {

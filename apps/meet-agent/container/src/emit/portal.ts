@@ -20,7 +20,9 @@ export function createPortalPublisher(opts: Opts): Publisher {
         const portal = new Portal({ apiKey: opts.apiKey, token: opts.token });
         const room = portal.channel<AgentEvent>(opts.channelId);
         room.acquire();
-        send = (ev) => room.send({ content: ev });
+        send = async (ev) => {
+            await room.send({ content: ev });
+        };
         return send;
     };
 
