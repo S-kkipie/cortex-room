@@ -12,7 +12,7 @@ vi.mock("@better-auth-ui/react", () => ({
         localization: {
             auth: { continueWith: "Continue with {{provider}}" },
         },
-        redirectTo: "/projects",
+        redirectTo: "/canvas",
     }),
     useSignInSocial: () => ({ mutate: mocks.signInSocial }),
 }));

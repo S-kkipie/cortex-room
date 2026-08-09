@@ -29,9 +29,9 @@ export function CanvasShell({
                         className="canvas-back-button"
                         aria-label="Back to projects"
                     >
-                        <Link href="/projects">
+                        <Link href="/canvas">
                             <ArrowLeft />
-                            <span className="hidden sm:inline">Projects</span>
+                            <span className="hidden sm:inline">Reuniones</span>
                         </Link>
                     </Button>
                     <span className="canvas-brand-mark" aria-hidden="true">

@@ -1,4 +1,4 @@
-export const DEFAULT_RETURN_TO = "/projects";
+export const DEFAULT_RETURN_TO = "/canvas";
 
 function containsUnsafeControlCharacter(value: string): boolean {
     return Array.from(value).some((character) => {

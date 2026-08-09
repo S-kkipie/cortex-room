@@ -28,7 +28,7 @@ export function Providers({ children }: PropsWithChildren) {
                     <EdenProvider client={apiClient} queryClient={queryClient}>
                         <AuthProvider
                             authClient={authClient}
-                            redirectTo="/projects"
+                            redirectTo="/canvas"
                             emailAndPassword={{
                                 enabled: true,
                                 forgotPassword: true,

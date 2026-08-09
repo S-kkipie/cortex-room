@@ -32,7 +32,7 @@ export default function CanvasError({
                         Retry
                     </Button>
                     <Button asChild variant="outline">
-                        <Link href="/projects">Back to projects</Link>
+                        <Link href="/canvas">Volver a reuniones</Link>
                     </Button>
                 </div>
             </section>

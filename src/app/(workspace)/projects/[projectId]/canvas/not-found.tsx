@@ -12,7 +12,7 @@ export default function CanvasNotFound() {
                     </p>
                 </div>
                 <Button asChild>
-                    <Link href="/projects">Back to projects</Link>
+                    <Link href="/canvas">Volver a reuniones</Link>
                 </Button>
             </section>
         </main>
