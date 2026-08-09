@@ -150,7 +150,7 @@ export class MeetingAgent extends DurableObject<Env> {
                 rawBody,
                 headers: headerRecord(req.headers),
                 secret: this.env.RECALL_WEBHOOK_SECRET,
-                t0Ms: this.t0Anchored ?? this.t0Ms ?? Date.now(),
+                t0Ms: this.t0Anchored ?? (this.t0Ms || Date.now()),
                 meetingId: this.meetingId,
                 genId: () => crypto.randomUUID(),
             });
