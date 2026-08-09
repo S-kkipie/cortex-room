@@ -15,6 +15,7 @@ export type RouteDeps = {
 
 const CONTROL_RE = /^\/meetings\/([^/]+)(\/(start|stop|transcript|stream))?$/;
 const WEBHOOK_RE = /^\/webhooks\/recall\/([^/]+)\/?$/;
+const ALARM_INTERVAL_MS = 30_000;
 
 function forwardTo(deps: RouteDeps, meetingId: string, url: URL, req: Request): Promise<Response> {
     const headers = new Headers(req.headers);
@@ -68,6 +69,10 @@ export function isUuid(value: string): boolean {
     return UUID_RE.test(value);
 }
 
+export function shouldContinueAlarm(state: string, hasBridge: boolean): boolean {
+    return hasBridge && state === "in_meeting";
+}
+
 type SessionState = "idle" | "in_meeting" | "ended";
 
 function headerRecord(h: Headers): Record<string, string> {
@@ -104,6 +109,13 @@ export class MeetingAgent extends DurableObject<Env> {
         this.buffer.append(ev);
         void this.pub().publish(ev);
         if (this.bridge && bridgeShouldConsume(ev)) this.bridge.onSegment((ev as { segment: TranscriptSegment }).segment);
+    }
+
+    async alarm(): Promise<void> {
+        const bridge = this.bridge;
+        if (bridge === null || !shouldContinueAlarm(this.state, true)) return;
+        await bridge.flush().catch(() => {});
+        await this.ctx.storage.setAlarm(Date.now() + ALARM_INTERVAL_MS);
     }
 
     async fetch(req: Request): Promise<Response> {
@@ -145,6 +157,9 @@ export class MeetingAgent extends DurableObject<Env> {
             this.botId = botId;
             this.t0Ms = Date.now();
             this.state = "in_meeting";
+            if (this.bridge) {
+                await this.ctx.storage.setAlarm(Date.now() + ALARM_INTERVAL_MS);
+            }
             this.emit({ type: "session.started", meetingId: this.meetingId, at: new Date(this.t0Ms).toISOString() });
             return Response.json({ botId, state: this.state });
         }
@@ -154,6 +169,7 @@ export class MeetingAgent extends DurableObject<Env> {
                 await stopRecallBot({ apiKey: this.env.RECALL_API_KEY, region: this.env.RECALL_REGION, botId: this.botId }).catch(() => {});
             }
             if (this.bridge) await this.bridge.flush().catch(() => {});
+            await this.ctx.storage.deleteAlarm();
             this.state = "ended";
             this.emit({ type: "session.ended", meetingId: this.meetingId, at: new Date(Date.now()).toISOString(), reason: "requested" });
             return Response.json({ state: this.state });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEvent } from "../../container/src/contract/events";
-import { bridgeShouldConsume, isUuid } from "../worker";
+import { bridgeShouldConsume, isUuid, shouldContinueAlarm } from "../worker";
 
 const finalSeg: AgentEvent = {
     type: "transcript.segment",
@@ -33,5 +33,20 @@ describe("isUuid", () => {
     });
     it("rejects an empty string", () => {
         expect(isUuid("")).toBe(false);
+    });
+});
+
+describe("shouldContinueAlarm", () => {
+    it("returns true when meeting is active and bridge exists", () => {
+        expect(shouldContinueAlarm("in_meeting", true)).toBe(true);
+    });
+    it("returns false when meeting is active but bridge is missing", () => {
+        expect(shouldContinueAlarm("in_meeting", false)).toBe(false);
+    });
+    it("returns false when meeting ended even if bridge exists", () => {
+        expect(shouldContinueAlarm("ended", true)).toBe(false);
+    });
+    it("returns false when meeting is idle even if bridge exists", () => {
+        expect(shouldContinueAlarm("idle", true)).toBe(false);
     });
 });
