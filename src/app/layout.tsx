@@ -4,8 +4,8 @@ import { Providers } from "@/frontend/providers/providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-    title: "Hackaton Starter",
-    description: "Next + Elysia + Better Auth + Drizzle starter",
+    title: "Cortex Room",
+    description: "Collaborative canvas for real-time teams",
 };
 
 export default function RootLayout({ children }: PropsWithChildren) {
