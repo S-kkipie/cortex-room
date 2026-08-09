@@ -15,6 +15,7 @@ const contextMock = vi.hoisted(() => ({
         | "degraded-http"
         | "blocked"
         | "unavailable",
+    onlineParticipantCount: 0,
 }));
 
 vi.mock("@/core/canvas/client/controller/canvas-controller-context", () => ({
@@ -36,6 +37,7 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 afterEach(() => {
     contextMock.portalStatus = "ready";
+    contextMock.onlineParticipantCount = 0;
     document.body.replaceChildren();
 });
 
@@ -56,6 +58,18 @@ describe("CanvasConnectionStatus", () => {
         expect(statusElement?.getAttribute("aria-live")).toBe("polite");
         expect(statusElement?.getAttribute("data-status")).toBe(status);
         expect(statusElement?.textContent).toContain(label);
+        view.unmount();
+    });
+
+    it("shows the remote collaborator count with the connection status", () => {
+        contextMock.onlineParticipantCount = 2;
+        const view = render(createElement(CanvasConnectionStatus));
+
+        expect(
+            view.container.querySelector(
+                '[data-testid="canvas-connection-status"]',
+            )?.textContent,
+        ).toContain("· 2");
         view.unmount();
     });
 });

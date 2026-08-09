@@ -4,6 +4,7 @@ import type {
     CanvasMutationResult,
     CanvasPortalEvent,
     CanvasPortalMessage,
+    CursorPosition,
     ElementTombstone,
     WorkspaceElement,
 } from "@/core/canvas/domain/types";
@@ -165,5 +166,25 @@ export function buildTextPreviewMessage(
         kind: "workspace.element.updated.preview",
         elementId,
         content,
+    });
+}
+
+export function buildCursorMessage(
+    metadata: PreviewMetadata,
+    cursor: CursorPosition,
+): CanvasPortalMessage {
+    return previewMessage("participant.cursor.moved", metadata, {
+        kind: "participant.cursor.moved",
+        cursor,
+    });
+}
+
+export function buildSelectionMessage(
+    metadata: PreviewMetadata,
+    elementIds: readonly string[],
+): CanvasPortalMessage {
+    return previewMessage("participant.selection.changed", metadata, {
+        kind: "participant.selection.changed",
+        elementIds: [...elementIds],
     });
 }

@@ -60,4 +60,24 @@ describe("toReactFlowNodes", () => {
         expect(nodes[0].measured).toEqual({ width: 300, height: 220 });
         expect(stickyElement.x).not.toBe(80);
     });
+
+    it("derives remote selections without changing local selected state", () => {
+        const nodes = toReactFlowNodes(
+            [stickyElement],
+            new Map(),
+            [],
+            [
+                {
+                    id: "remote-user",
+                    label: "Ada",
+                    selectedElementIds: [stickyElement.id],
+                },
+            ],
+        );
+
+        expect(nodes[0].selected).toBe(false);
+        expect(nodes[0].data.remoteSelectedBy).toEqual([
+            { id: "remote-user", label: "Ada" },
+        ]);
+    });
 });

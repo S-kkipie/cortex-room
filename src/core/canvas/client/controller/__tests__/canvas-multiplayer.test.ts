@@ -319,6 +319,51 @@ describe("canvas multiplayer operations", () => {
         expect(publishEphemeral).toHaveBeenCalledTimes(4);
     });
 
+    it("throttles cursor awareness and publishes selection awareness ephemerally", () => {
+        vi.useFakeTimers();
+        const publishEphemeral = vi.fn(async () => undefined);
+        const test = controller({
+            realtime: {
+                publishPersistent: vi.fn(async () => undefined),
+                publishEphemeral,
+            },
+        });
+
+        test.actions.publishCursor({ x: 10, y: 20 });
+        test.actions.publishCursor({ x: 30, y: 40 });
+        expect(publishEphemeral).toHaveBeenCalledOnce();
+        expect(publishEphemeral).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                content: expect.objectContaining({
+                    kind: "participant.cursor.moved",
+                    cursor: { x: 10, y: 20 },
+                }),
+            }),
+        );
+
+        vi.advanceTimersByTime(50);
+        expect(publishEphemeral).toHaveBeenCalledTimes(2);
+        expect(publishEphemeral).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                content: expect.objectContaining({
+                    kind: "participant.cursor.moved",
+                    cursor: { x: 30, y: 40 },
+                }),
+            }),
+        );
+
+        test.actions.publishSelection([elementId]);
+        expect(publishEphemeral).toHaveBeenCalledTimes(3);
+        expect(publishEphemeral).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                content: expect.objectContaining({
+                    kind: "participant.selection.changed",
+                    elementIds: [elementId],
+                }),
+            }),
+        );
+    });
+
     it("applies remote previews outside the canonical snapshot", () => {
         const setPreview = vi.fn();
         const clearPreview = vi.fn();

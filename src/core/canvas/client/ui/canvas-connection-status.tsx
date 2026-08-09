@@ -24,7 +24,7 @@ function statusTone(status: CanvasPortalStatus): string {
 }
 
 export function CanvasConnectionStatus() {
-    const { portalStatus } = useCanvasController();
+    const { onlineParticipantCount, portalStatus } = useCanvasController();
     const Icon =
         portalStatus === "blocked" || portalStatus === "unavailable"
             ? WifiOff
@@ -40,6 +40,11 @@ export function CanvasConnectionStatus() {
         >
             <Icon aria-hidden="true" className="size-3.5" />
             <span>{STATUS_LABELS[portalStatus]}</span>
+            {onlineParticipantCount > 0 ? (
+                <span title={`${onlineParticipantCount} collaborators online`}>
+                    · {onlineParticipantCount}
+                </span>
+            ) : null}
         </div>
     );
 }

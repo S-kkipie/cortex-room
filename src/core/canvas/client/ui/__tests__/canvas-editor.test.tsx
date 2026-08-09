@@ -70,10 +70,12 @@ const contextMock = vi.hoisted(() => ({
     getPreview: vi.fn(),
     beginEditing: vi.fn(),
     setTextDraft: vi.fn(),
+    publishCursor: vi.fn(),
     confirmEditing: vi.fn(),
     cancelEditing: vi.fn(),
     fitViewHasRun: false,
     markFitViewComplete: vi.fn(),
+    remoteParticipants: [],
 }));
 
 vi.mock("@xyflow/react", () => ({
@@ -116,6 +118,7 @@ afterEach(() => {
     contextMock.activeTool = "select";
     contextMock.fitViewHasRun = false;
     contextMock.selectedElementIds = [];
+    contextMock.remoteParticipants = [];
     flowMock.reactFlowProps = null;
     vi.clearAllMocks();
     document.body.replaceChildren();
@@ -182,6 +185,29 @@ describe("CanvasEditor", () => {
         act(() => onPaneClick({ clientX: 0, clientY: 0 }));
         expect(contextMock.actions.selectElements).toHaveBeenLastCalledWith([]);
         expect(flowMock.reactFlowProps?.onSelectionChange).toBeUndefined();
+        view.unmount();
+    });
+
+    it("publishes screen coordinates converted to flow coordinates", () => {
+        const view = render(createElement(CanvasEditor));
+        const editor = view.container.querySelector<HTMLDivElement>(
+            '[aria-label="Canvas editor"]',
+        );
+
+        act(() => {
+            editor?.dispatchEvent(
+                new MouseEvent("mousemove", {
+                    bubbles: true,
+                    clientX: 500,
+                    clientY: 600,
+                }),
+            );
+        });
+
+        expect(contextMock.publishCursor).toHaveBeenCalledWith({
+            x: 200,
+            y: 300,
+        });
         view.unmount();
     });
 

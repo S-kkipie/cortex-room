@@ -1,5 +1,6 @@
 import { compareOperationVersions } from "@/core/canvas/domain/operation-version";
 import {
+    CURSOR_THROTTLE_MS,
     canvasMutationResultSchema,
     canvasPortalMessageSchema,
     createElementCommandSchema,
@@ -27,9 +28,11 @@ import type {
     WorkspaceElement,
 } from "@/core/canvas/domain/types";
 import {
+    buildCursorMessage,
     buildFinalCanvasMessage,
     buildMovePreviewMessage,
     buildResizePreviewMessage,
+    buildSelectionMessage,
     buildTextPreviewMessage,
     type CanvasRealtimePort,
 } from "../portal/canvas-portal-events";
@@ -89,6 +92,8 @@ export type CanvasActions = {
         dimensions: ResizeElementInput,
     ): void;
     publishTextPreview(elementId: string, content: string): void;
+    publishCursor(cursor: { x: number; y: number }): void;
+    publishSelection(elementIds: readonly string[]): void;
     cancelPreviews(elementId: string): void;
     cancelAllPreviews(): void;
     selectElements(elementIds: string[]): void;
@@ -208,6 +213,7 @@ export function createCanvasActions({
     const scheduleThrottledPreview = (
         key: string,
         build: () => CanvasPortalMessage,
+        intervalMs = ELEMENT_PREVIEW_THROTTLE_MS,
     ) => {
         if (!realtime) return;
 
@@ -215,7 +221,7 @@ export function createCanvasActions({
             lastSentAt: Number.NEGATIVE_INFINITY,
         };
         const elapsed = Date.now() - current.lastSentAt;
-        if (!current.timer && elapsed >= ELEMENT_PREVIEW_THROTTLE_MS) {
+        if (!current.timer && elapsed >= intervalMs) {
             current.lastSentAt = Date.now();
             publishPreview(build);
             throttledPreviewStates.set(key, current);
@@ -239,7 +245,7 @@ export function createCanvasActions({
                 }
                 throttledPreviewStates.set(key, current);
             },
-            Math.max(0, ELEMENT_PREVIEW_THROTTLE_MS - elapsed),
+            Math.max(0, intervalMs - elapsed),
         );
         throttledPreviewStates.set(key, current);
     };
@@ -662,6 +668,37 @@ export function createCanvasActions({
         );
     };
 
+    const publishCursor = (cursor: { x: number; y: number }) => {
+        scheduleThrottledPreview(
+            "cursor",
+            () =>
+                buildCursorMessage(
+                    {
+                        eventId: idFactory(),
+                        projectId,
+                        occurredAt: now(),
+                        senderId: userId,
+                    },
+                    cursor,
+                ),
+            CURSOR_THROTTLE_MS,
+        );
+    };
+
+    const publishSelection = (elementIds: readonly string[]) => {
+        publishPreview(() =>
+            buildSelectionMessage(
+                {
+                    eventId: idFactory(),
+                    projectId,
+                    occurredAt: now(),
+                    senderId: userId,
+                },
+                elementIds,
+            ),
+        );
+    };
+
     return {
         createElement,
         updateElement,
@@ -672,6 +709,8 @@ export function createCanvasActions({
         publishMovePreview,
         publishResizePreview,
         publishTextPreview,
+        publishCursor,
+        publishSelection,
         cancelPreviews,
         cancelAllPreviews,
         selectElements: (elementIds: string[]) =>

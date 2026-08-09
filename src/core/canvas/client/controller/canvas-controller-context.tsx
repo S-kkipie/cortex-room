@@ -13,12 +13,18 @@ import {
 import { toast } from "sonner";
 import { useCanvas } from "@/core/canvas/client/hooks";
 import {
+    type CanvasRemoteParticipant,
+    normalizeCanvasAwareness,
+} from "@/core/canvas/client/portal/canvas-awareness";
+import {
     type CanvasPortalStatus,
     useCanvasPortal,
 } from "@/core/canvas/client/portal/canvas-portal-provider";
+import { PRESENCE_METADATA_THROTTLE_MS } from "@/core/canvas/domain/schemas";
 import type {
     CanvasMutationResult,
     CanvasSnapshot,
+    CursorPosition,
 } from "@/core/canvas/domain/types";
 import type { CanvasActions, CanvasSelectionPort } from "./canvas-controller";
 import type { CanvasPreview, CanvasPreviewPort } from "./canvas-preview";
@@ -47,6 +53,10 @@ export type CanvasControllerValue = {
     editingElementId: string | null;
     textDrafts: Record<string, string>;
     previews: ReadonlyMap<string, CanvasPreview>;
+    onlineParticipantCount: number;
+    remoteParticipants: readonly CanvasRemoteParticipant[];
+    remoteCursors: ReadonlyMap<string, CursorPosition>;
+    remoteSelections: ReadonlyMap<string, readonly string[]>;
     setMovePreview(elementId: string, preview: { x: number; y: number }): void;
     setResizePreview(
         elementId: string,
@@ -56,6 +66,7 @@ export type CanvasControllerValue = {
     getPreview(elementId: string): CanvasPreview | undefined;
     beginEditing(elementId: string): void;
     setTextDraft(elementId: string, content: string): void;
+    publishCursor(cursor: CursorPosition): void;
     confirmEditing(
         elementId: string,
     ): Promise<CanvasMutationResult | undefined>;
@@ -82,9 +93,16 @@ export function CanvasControllerProvider({
     const [previews, setPreviews] = useState<Map<string, CanvasPreview>>(
         () => new Map(),
     );
+    const [localCursor, setLocalCursor] = useState<CursorPosition | undefined>(
+        undefined,
+    );
     const [fitViewHasRun, setFitViewHasRun] = useState(false);
     const pendingTextCommitsRef = useRef(new Set<string>());
     const selectedElementIdsRef = useRef(selectedElementIds);
+    const presenceMetadataTimerRef = useRef<ReturnType<
+        typeof setTimeout
+    > | null>(null);
+    const selectionInitializedRef = useRef(false);
     const selectionRef = useRef<CanvasSelectionPort>({
         read: () => selectedElementIdsRef.current,
         write: (elementIds) => {
@@ -132,6 +150,16 @@ export function CanvasControllerProvider({
         }),
         [portal.sendEphemeral, portal.sendPersistent],
     );
+    const awareness = useMemo(
+        () =>
+            normalizeCanvasAwareness(
+                portal.presence,
+                portal.messages,
+                projectId,
+                portal.me?.id,
+            ),
+        [portal.me?.id, portal.messages, portal.presence, projectId],
+    );
     const { snapshotQuery, actions } = canvas.useController({
         projectId,
         userId,
@@ -148,6 +176,41 @@ export function CanvasControllerProvider({
             actions.applyRemoteMessage(message);
         }
     }, [actions, portal.messages, snapshotQuery.data?.response]);
+
+    useEffect(() => {
+        if (!selectionInitializedRef.current) {
+            selectionInitializedRef.current = true;
+            return;
+        }
+        actions.publishSelection(selectedElementIds);
+    }, [actions, selectedElementIds]);
+
+    useEffect(() => {
+        if (!portal.configured) return;
+        if (presenceMetadataTimerRef.current) {
+            clearTimeout(presenceMetadataTimerRef.current);
+        }
+
+        presenceMetadataTimerRef.current = setTimeout(() => {
+            presenceMetadataTimerRef.current = null;
+            portal.setMetadata({
+                ...(localCursor ? { cursor: localCursor } : {}),
+                selectedElementIds,
+            });
+        }, PRESENCE_METADATA_THROTTLE_MS);
+
+        return () => {
+            if (presenceMetadataTimerRef.current) {
+                clearTimeout(presenceMetadataTimerRef.current);
+                presenceMetadataTimerRef.current = null;
+            }
+        };
+    }, [
+        localCursor,
+        portal.configured,
+        portal.setMetadata,
+        selectedElementIds,
+    ]);
 
     useEffect(() => () => actions.cancelAllPreviews(), [actions]);
 
@@ -196,6 +259,14 @@ export function CanvasControllerProvider({
         (elementId: string, content: string) => {
             setTextDrafts((current) => ({ ...current, [elementId]: content }));
             actions.publishTextPreview(elementId, content);
+        },
+        [actions],
+    );
+
+    const publishCursor = useCallback(
+        (cursor: CursorPosition) => {
+            setLocalCursor(cursor);
+            actions.publishCursor(cursor);
         },
         [actions],
     );
@@ -266,12 +337,17 @@ export function CanvasControllerProvider({
         editingElementId,
         textDrafts,
         previews,
+        onlineParticipantCount: awareness.onlineCount,
+        remoteParticipants: awareness.participants,
+        remoteCursors: awareness.cursors,
+        remoteSelections: awareness.selections,
         setMovePreview,
         setResizePreview,
         clearPreview,
         getPreview: (elementId) => previews.get(elementId),
         beginEditing,
         setTextDraft,
+        publishCursor,
         confirmEditing,
         cancelEditing,
         fitViewHasRun,

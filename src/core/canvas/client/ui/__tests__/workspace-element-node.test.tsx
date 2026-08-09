@@ -70,10 +70,11 @@ function render(elementToRender: ReactElement) {
 function nodeProps(
     selected: boolean,
     preview?: { content?: string },
+    remoteSelectedBy: { id: string; label: string }[] = [],
 ): NodeProps<WorkspaceElementNode> {
     return {
         id: element.id,
-        data: { element, preview },
+        data: { element, preview, remoteSelectedBy },
         selected,
         dragging: false,
         type: "workspaceElement",
@@ -148,6 +149,25 @@ describe("WorkspaceElementNode", () => {
         expect(view.container.textContent).toContain("Remote title");
         expect(view.container.textContent).toContain("Remote detail");
         expect(view.container.textContent).not.toContain("Title");
+        view.unmount();
+    });
+
+    it("renders remote selection without exposing local resize controls", () => {
+        const view = render(
+            createElement(
+                WorkspaceElementNodeComponent,
+                nodeProps(false, undefined, [
+                    { id: "remote-user", label: "Ada" },
+                ]),
+            ),
+        );
+
+        const node = view.container.querySelector('[data-element-type="CARD"]');
+        expect(node?.className).toContain("ring-2");
+        expect(view.container.textContent).toContain("Ada");
+        expect(
+            view.container.querySelector('[data-testid="node-resizer"]'),
+        ).toBeNull();
         view.unmount();
     });
 });

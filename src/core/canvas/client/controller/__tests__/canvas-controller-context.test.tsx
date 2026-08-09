@@ -36,6 +36,8 @@ const controllerMock = vi.hoisted(() => ({
     publishMovePreview: vi.fn(),
     publishResizePreview: vi.fn(),
     publishTextPreview: vi.fn(),
+    publishCursor: vi.fn(),
+    publishSelection: vi.fn(),
     cancelPreviews: vi.fn(),
     cancelAllPreviews: vi.fn(),
     selectElements: vi.fn(),
@@ -43,6 +45,16 @@ const controllerMock = vi.hoisted(() => ({
     getElements: vi.fn(),
     getSelectedElements: vi.fn(),
     refetch: vi.fn(),
+}));
+
+const portalMock = vi.hoisted(() => ({
+    configured: false,
+    status: "unavailable" as const,
+    historyReady: true,
+    messages: [] as unknown[],
+    presence: undefined,
+    me: undefined,
+    setMetadata: vi.fn(),
 }));
 
 const selectionPortMock = vi.hoisted(() => ({
@@ -87,6 +99,8 @@ vi.mock("@/core/canvas/client/hooks", () => ({
                     publishMovePreview: controllerMock.publishMovePreview,
                     publishResizePreview: controllerMock.publishResizePreview,
                     publishTextPreview: controllerMock.publishTextPreview,
+                    publishCursor: controllerMock.publishCursor,
+                    publishSelection: controllerMock.publishSelection,
                     cancelPreviews: controllerMock.cancelPreviews,
                     cancelAllPreviews: controllerMock.cancelAllPreviews,
                     selectElements: controllerMock.selectElements,
@@ -100,12 +114,7 @@ vi.mock("@/core/canvas/client/hooks", () => ({
 }));
 
 vi.mock("@/core/canvas/client/portal/canvas-portal-provider", () => ({
-    useCanvasPortal: () => ({
-        configured: false,
-        status: "unavailable",
-        historyReady: true,
-        messages: [],
-    }),
+    useCanvasPortal: () => portalMock,
 }));
 
 function Probe() {
@@ -149,6 +158,14 @@ function Probe() {
             "preview",
         ),
         createElement(
+            "button",
+            {
+                type: "button",
+                onClick: () => controller.publishCursor({ x: 20, y: 30 }),
+            },
+            "cursor",
+        ),
+        createElement(
             "output",
             { "data-testid": "state" },
             `${controller.editingElementId ?? "none"}:${controller.getPreview(elementId)?.x ?? "none"}`,
@@ -173,6 +190,8 @@ afterEach(() => {
     vi.clearAllMocks();
     probeRenderCount = 0;
     selectionPortMock.current = null;
+    portalMock.configured = false;
+    portalMock.setMetadata.mockReset();
     document.body.replaceChildren();
 });
 
@@ -287,6 +306,35 @@ describe("CanvasControllerProvider", () => {
         expect(controllerMock.updateElement).toHaveBeenCalledOnce();
         resolveUpdate?.({ applied: true, record: element });
         await act(async () => undefined);
+        view.unmount();
+    });
+
+    it("throttles presence metadata while selection and cursor change", () => {
+        vi.useFakeTimers();
+        portalMock.configured = true;
+        const view = render(
+            createElement(
+                CanvasControllerProvider,
+                { projectId: element.projectId, userId: "user-1" },
+                createElement(Probe),
+            ),
+        );
+
+        act(() => {
+            selectionPortMock.current?.write([elementId]);
+            view.container
+                .querySelectorAll<HTMLButtonElement>("button")[4]
+                ?.click();
+        });
+
+        expect(portalMock.setMetadata).not.toHaveBeenCalled();
+        act(() => vi.advanceTimersByTime(249));
+        expect(portalMock.setMetadata).not.toHaveBeenCalled();
+        act(() => vi.advanceTimersByTime(1));
+        expect(portalMock.setMetadata).toHaveBeenCalledWith({
+            cursor: { x: 20, y: 30 },
+            selectedElementIds: [elementId],
+        });
         view.unmount();
     });
 });

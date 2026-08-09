@@ -8,7 +8,7 @@ import {
     useReactFlow,
     type Viewport,
 } from "@xyflow/react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, MouseEvent } from "react";
 import { useCallback, useEffect, useMemo } from "react";
 import {
     type CanvasTool,
@@ -27,6 +27,7 @@ import {
 import type { WorkspaceElementType } from "@/core/canvas/domain/types";
 import { Button } from "@/frontend/components/ui/button";
 import { CanvasConnectionStatus } from "./canvas-connection-status";
+import { CanvasRemoteCursors } from "./canvas-remote-cursors";
 import { CanvasToolbar } from "./canvas-toolbar";
 import { WORKSPACE_NODE_TYPES } from "./workspace-element-node";
 
@@ -70,6 +71,8 @@ export function CanvasEditor({
         isLoading,
         markFitViewComplete,
         previews,
+        publishCursor,
+        remoteParticipants,
         retry,
         selectedElementIds,
         setActiveTool,
@@ -82,8 +85,21 @@ export function CanvasEditor({
                 snapshot?.elements ?? [],
                 previews,
                 selectedElementIds,
+                remoteParticipants,
             ),
-        [snapshot?.elements, previews, selectedElementIds],
+        [remoteParticipants, snapshot?.elements, previews, selectedElementIds],
+    );
+
+    const handleCanvasMouseMove = useCallback(
+        (event: MouseEvent<HTMLDivElement>) => {
+            publishCursor(
+                screenToFlowPosition({
+                    x: event.clientX,
+                    y: event.clientY,
+                }),
+            );
+        },
+        [publishCursor, screenToFlowPosition],
     );
 
     const handleNodeDrag = useCallback(
@@ -160,6 +176,7 @@ export function CanvasEditor({
             className="relative size-full overflow-hidden"
             onKeyDown={handleKeyDown}
             role="application"
+            onMouseMove={handleCanvasMouseMove}
             // biome-ignore lint/a11y/noNoninteractiveTabindex: Canvas editor is the keyboard focus target
             tabIndex={0}
         >
@@ -256,6 +273,7 @@ export function CanvasEditor({
                     color="var(--muted-foreground)"
                     style={{ opacity: 1 }}
                 />
+                <CanvasRemoteCursors participants={remoteParticipants} />
             </ReactFlow>
         </div>
     );
