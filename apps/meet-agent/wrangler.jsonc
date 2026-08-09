@@ -7,7 +7,6 @@
     },
     "migrations": [{ "tag": "v1", "new_classes": ["MeetingAgent"] }],
     "vars": {
-        "AUTH_TOKEN": "change-me-in-secrets",
         "RECALL_REGION": "us-west-2",
         "PUBLIC_BASE_URL": "https://cortex-meet-agent.example.workers.dev",
     },
