@@ -8,7 +8,7 @@ function speakerName(seg: TranscriptSegment): string {
         return seg.speaker.displayName;
     }
 
-    if (seg.speaker.kind === "unresolved" && seg.speaker.diarizedLabel) {
+    if ("kind" in seg.speaker && seg.speaker.kind === "unresolved" && seg.speaker.diarizedLabel) {
         return seg.speaker.diarizedLabel;
     }
 
