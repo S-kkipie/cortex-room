@@ -10,9 +10,7 @@
     },
     "dependencies": {
         "@portalsdk/core": "^0.1.0",
-        "assemblyai": "^4.9.0",
         "nanoid": "^5.1.16",
-        "playwright": "^1.49.0",
         "zod": "^4.4.3"
     },
     "devDependencies": {
