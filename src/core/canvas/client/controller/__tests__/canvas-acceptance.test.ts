@@ -97,11 +97,15 @@ describe("canvas collaborative acceptance", () => {
     it("converges two clients through every permanent action and reload", async () => {
         let persisted = emptySnapshot();
         const persistentKinds: string[] = [];
+        const eventLog: string[] = [];
+        let resolvePendingPersistence: (() => void) | undefined;
         const clientB = createClient({ userId: "user-b" });
         let remoteActions: CanvasActions = clientB.actions;
         const realtime: CanvasRealtimePort = {
             publishPersistent: async (message) => {
+                const publicationIndex = persistentKinds.length;
                 persistentKinds.push(message.content.kind);
+                eventLog.push(`published:${publicationIndex}`);
                 remoteActions.applyRemoteMessage(message);
             },
             publishEphemeral: async (message) => {
@@ -127,8 +131,18 @@ describe("canvas collaborative acceptance", () => {
                         current.tombstones.find(({ id }) => id === targetId);
                     if (!record)
                         throw new Error("Expected optimistic canvas record");
-                    persisted = reconcileCanvasRecord(persisted, record);
-                    return { applied: true, record };
+                    const persistenceIndex = persistentKinds.length;
+                    return new Promise((resolve) => {
+                        resolvePendingPersistence = () => {
+                            resolvePendingPersistence = undefined;
+                            persisted = reconcileCanvasRecord(
+                                persisted,
+                                record,
+                            );
+                            eventLog.push(`persisted:${persistenceIndex}`);
+                            resolve({ applied: true, record });
+                        };
+                    });
                 };
 
                 return {
@@ -139,26 +153,63 @@ describe("canvas collaborative acceptance", () => {
             },
         });
 
-        await clientA.actions.createElement({
-            type: "STICKY",
-            content: "Initial",
-            x: 10,
-            y: 20,
-            width: 240,
-            height: 180,
-        });
+        const completePermanentAction = async (
+            action: () => Promise<CanvasMutationResult>,
+            expectedKind: string,
+        ) => {
+            const actionIndex = persistentKinds.length;
+            const actionPromise = action();
+            expect(persistentKinds).toHaveLength(actionIndex);
+
+            const resolve = resolvePendingPersistence;
+            if (!resolve)
+                throw new Error("Expected deferred canvas persistence");
+            resolve();
+
+            await actionPromise;
+            expect(persistentKinds).toHaveLength(actionIndex + 1);
+            expect(persistentKinds[actionIndex]).toBe(expectedKind);
+            expect(eventLog.slice(-2)).toEqual([
+                `persisted:${actionIndex}`,
+                `published:${actionIndex}`,
+            ]);
+        };
+
+        await completePermanentAction(
+            () =>
+                clientA.actions.createElement({
+                    type: "STICKY",
+                    content: "Initial",
+                    x: 10,
+                    y: 20,
+                    width: 240,
+                    height: 180,
+                }),
+            "workspace.element.created.final",
+        );
         expect(clientB.actions.getElement(elementId)).toMatchObject({
             content: "Initial",
             x: 10,
             y: 20,
         });
 
-        await clientA.actions.updateElement(elementId, { content: "Final" });
-        await clientA.actions.moveElement(elementId, { x: 80, y: 90 });
-        await clientA.actions.resizeElement(elementId, {
-            width: 320,
-            height: 220,
-        });
+        await completePermanentAction(
+            () =>
+                clientA.actions.updateElement(elementId, { content: "Final" }),
+            "workspace.element.updated.final",
+        );
+        await completePermanentAction(
+            () => clientA.actions.moveElement(elementId, { x: 80, y: 90 }),
+            "workspace.element.moved.final",
+        );
+        await completePermanentAction(
+            () =>
+                clientA.actions.resizeElement(elementId, {
+                    width: 320,
+                    height: 220,
+                }),
+            "workspace.element.resized.final",
+        );
         expect(clientB.actions.getElement(elementId)).toMatchObject({
             content: "Final",
             x: 80,
@@ -167,7 +218,10 @@ describe("canvas collaborative acceptance", () => {
             height: 220,
         });
 
-        await clientA.actions.deleteElement(elementId);
+        await completePermanentAction(
+            () => clientA.actions.deleteElement(elementId),
+            "workspace.element.deleted.final",
+        );
         expect(clientB.actions.getElements()).toEqual([]);
         expect(clientB.read().tombstones).toHaveLength(1);
         expect(persistentKinds).toEqual([
