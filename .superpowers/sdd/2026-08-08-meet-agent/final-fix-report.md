@@ -61,4 +61,6 @@ Process exited 0.
 
 ## Commit
 
-Commit hash: pending final commit.
+Implementation commit hash: `1d75a0b`.
+
+The report update is committed as the final follow-up commit for this fix wave.
