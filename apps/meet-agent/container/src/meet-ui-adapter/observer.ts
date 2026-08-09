@@ -6,7 +6,7 @@ export type ActiveSpeakerSample = { participantId: string; displayName: string; 
 export function readRoster(doc: Document, sel: typeof Selectors): RosterEntry[] {
     const out: RosterEntry[] = [];
     for (const tile of Array.from(doc.querySelectorAll(sel.participantTile))) {
-        const participantId = tile.getAttribute("data-participant-id");
+        const participantId = tile.getAttribute(sel.participantIdAttr);
         if (!participantId) continue;
         const nameEl = tile.querySelector(sel.participantName);
         out.push({ participantId, displayName: nameEl?.textContent?.trim() ?? participantId });
@@ -17,7 +17,7 @@ export function readRoster(doc: Document, sel: typeof Selectors): RosterEntry[] 
 export function readActiveSpeakers(doc: Document, sel: typeof Selectors, now: number): ActiveSpeakerSample[] {
     const out: ActiveSpeakerSample[] = [];
     for (const tile of Array.from(doc.querySelectorAll(sel.participantTile))) {
-        const participantId = tile.getAttribute("data-participant-id");
+        const participantId = tile.getAttribute(sel.participantIdAttr);
         if (!participantId) continue;
         if (!tile.matches(sel.activeSpeakerMarker)) continue;
         const nameEl = tile.querySelector(sel.participantName);

@@ -17,7 +17,13 @@ export async function routeRequest(req: Request, deps: RouteDeps): Promise<Respo
     const m = url.pathname.match(MEETING_RE);
     if (!m) return new Response("not found", { status: 404 });
     const meetingId = m[1];
-    return deps.forward(meetingId, req);
+    url.pathname = m[2] ?? "/state";
+    const forwarded = new Request(url, {
+        method: req.method,
+        headers: req.headers,
+        body: req.body,
+    });
+    return deps.forward(meetingId, forwarded);
 }
 
 export class MeetingAgent extends Container {

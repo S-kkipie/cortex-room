@@ -4,6 +4,7 @@ export const selectors = {
     nameInput: 'input[aria-label*="name" i]',
     askToJoinButton: 'button[jsname][aria-label*="join" i], button:has-text("Ask to join")',
     participantTile: "[data-participant-id]",
+    participantIdAttr: "data-participant-id",
     participantName: "[data-self-name], .participant-name",
     activeSpeakerMarker: '[data-is-speaking="true"], .speaking',
     leaveButton: 'button[aria-label*="leave" i]',

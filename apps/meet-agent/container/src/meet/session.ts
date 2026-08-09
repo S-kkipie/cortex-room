@@ -173,6 +173,9 @@ export class MeetSession {
         this.reducer = new SegmentReducer(meetingId);
         this.state = "starting";
         this.browser = await this.deps.launchBrowser(meetUrl, (sample) => this.recordActiveSample(sample));
+        this.state = "waiting_admission";
+        // True admission detection is a live/Task-10 follow-up; the browser factory
+        // currently resolves after the join click, so this state reflects that gap.
         await this.deps.stt.start();
         this.deps.stt.onMessage((raw) => this.ingestUtteranceRaw(raw));
         this.state = "in_meeting";

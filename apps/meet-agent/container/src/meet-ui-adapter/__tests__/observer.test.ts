@@ -6,7 +6,7 @@ import { readActiveSpeakers, readRoster } from "../observer";
 // construct a fake matching the reader's contract.
 function fakeDoc(tiles: Array<{ id: string; name: string; speaking: boolean }>): Document {
     const els = tiles.map((t) => ({
-        getAttribute: (a: string) => (a === "data-participant-id" ? t.id : null),
+        getAttribute: (a: string) => (a === selectors.participantIdAttr ? t.id : null),
         querySelector: (q: string) =>
             q === selectors.participantName ? ({ textContent: t.name } as unknown as Element) : null,
         matches: (q: string) => q === selectors.activeSpeakerMarker && t.speaking,
