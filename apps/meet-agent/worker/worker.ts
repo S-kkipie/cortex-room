@@ -59,6 +59,15 @@ export function bridgeShouldConsume(ev: AgentEvent): boolean {
     return ev.type === "transcript.segment" && ev.segment.isFinal;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// The canvas wire contract requires a UUID projectId; reject early so a
+// non-UUID canvasProjectId fails at /start instead of silently breaking every
+// (best-effort, swallowed) canvas publish downstream.
+export function isUuid(value: string): boolean {
+    return UUID_RE.test(value);
+}
+
 type SessionState = "idle" | "in_meeting" | "ended";
 
 function headerRecord(h: Headers): Record<string, string> {
@@ -106,6 +115,9 @@ export class MeetingAgent extends DurableObject<Env> {
         if (req.method === "POST" && path === "/start") {
             const { meetingUrl, canvasProjectId } = (await req.json()) as { meetingUrl?: string; canvasProjectId?: string };
             if (!meetingUrl) return new Response("meetingUrl required", { status: 400 });
+            if (canvasProjectId !== undefined && !isUuid(canvasProjectId)) {
+                return new Response("canvasProjectId must be a UUID", { status: 400 });
+            }
             let botId: string;
             try {
                 ({ botId } = await createRecallBot({

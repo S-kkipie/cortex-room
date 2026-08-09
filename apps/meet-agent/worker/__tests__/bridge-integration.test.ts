@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEvent } from "../../container/src/contract/events";
-import { bridgeShouldConsume } from "../worker";
+import { bridgeShouldConsume, isUuid } from "../worker";
 
 const finalSeg: AgentEvent = {
     type: "transcript.segment",
@@ -21,5 +21,17 @@ describe("bridgeShouldConsume", () => {
     });
     it("skips non-transcript events", () => {
         expect(bridgeShouldConsume({ type: "session.ended", meetingId: "m", at: "t", reason: "x" })).toBe(false);
+    });
+});
+
+describe("isUuid", () => {
+    it("accepts a valid v4 UUID", () => {
+        expect(isUuid("99999999-9999-4999-8999-999999999999")).toBe(true);
+    });
+    it("rejects a non-UUID slug", () => {
+        expect(isUuid("abc123")).toBe(false);
+    });
+    it("rejects an empty string", () => {
+        expect(isUuid("")).toBe(false);
     });
 });
