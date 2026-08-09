@@ -118,9 +118,9 @@ export class MeetingAgent extends DurableObject<Env> {
             } catch (err) {
                 return new Response(err instanceof Error ? err.message : "recall create failed", { status: 502 });
             }
-            if (canvasProjectId) {
-                this.canvasProjectId = canvasProjectId;
-                this.bridge = new Bridge({
+            this.canvasProjectId = canvasProjectId ?? null;
+            this.bridge = canvasProjectId
+                ? new Bridge({
                     projectId: canvasProjectId,
                     extractImpl: createGeminiExtractor({ apiKey: this.env.GEMINI_API_KEY }),
                     publisher: createCanvasPublisher({ apiKey: this.env.PORTAL_API_KEY, projectId: canvasProjectId }),
@@ -128,8 +128,8 @@ export class MeetingAgent extends DurableObject<Env> {
                     genId: () => crypto.randomUUID(),
                     now: () => Date.now(),
                     nowIso: () => new Date().toISOString(),
-                });
-            }
+                })
+                : null;
             this.botId = botId;
             this.t0Ms = Date.now();
             this.state = "in_meeting";

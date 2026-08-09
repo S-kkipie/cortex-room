@@ -12,3 +12,6 @@ Typecheck result
 
 Concerns
 - Full suite passes; existing expected stderr logging from resilience tests remains present.
+
+Follow-up fix
+- Cleared `canvasProjectId` and `bridge` on canvasless `/start` after Recall bot creation succeeds, preventing stale bridge reuse across reused Durable Object sessions.
