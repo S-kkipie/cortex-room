@@ -13,6 +13,13 @@ const logger = getLogger(["server", "auth"]);
 export const auth = betterAuth({
     baseURL: ServerConfig.baseUrl,
     basePath: "/api/v1/auth",
+    // Accept the configured origin plus tunnel/proxy hosts used in dev, so a
+    // same-origin sign-in from a proxied host is not rejected as untrusted.
+    trustedOrigins: [
+        ServerConfig.baseUrl,
+        "https://*.pirulines.net",
+        "http://*.pirulines.net",
+    ],
     secret: ServerConfig.betterAuthSecret,
     session: { freshAge: 0 },
     emailAndPassword: {
