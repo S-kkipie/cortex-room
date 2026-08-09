@@ -1,26 +1,19 @@
 "use client";
 
-import {
-    Background,
-    BackgroundVariant,
-    type Edge,
-    type Node,
-    ReactFlow,
-    ReactFlowProvider,
-    type Viewport,
-} from "@xyflow/react";
+import { ReactFlowProvider, type Viewport } from "@xyflow/react";
 import { useState } from "react";
+import { CanvasControllerProvider } from "@/core/canvas/client/controller/canvas-controller-context";
+import { CanvasEditor } from "@/core/canvas/client/ui/canvas-editor";
 import { CanvasViewportControls } from "@/core/canvas/client/ui/canvas-viewport-controls";
-import {
-    INITIAL_VIEWPORT,
-    MAX_ZOOM,
-    MIN_ZOOM,
-} from "@/core/canvas/client/viewport";
+import { INITIAL_VIEWPORT } from "@/core/canvas/client/viewport";
 
-const EMPTY_NODES: Node[] = [];
-const EMPTY_EDGES: Edge[] = [];
-
-export function NavigableCanvas() {
+export function NavigableCanvas({
+    projectId,
+    userId,
+}: {
+    projectId: string;
+    userId: string;
+}) {
     const [viewport, setViewport] = useState<Viewport>(INITIAL_VIEWPORT);
 
     return (
@@ -29,27 +22,13 @@ export function NavigableCanvas() {
             className="relative size-full overflow-hidden"
         >
             <ReactFlowProvider>
-                <ReactFlow
-                    nodes={EMPTY_NODES}
-                    edges={EMPTY_EDGES}
-                    viewport={viewport}
-                    onViewportChange={setViewport}
-                    minZoom={MIN_ZOOM}
-                    maxZoom={MAX_ZOOM}
-                    panOnDrag
-                    zoomOnScroll
-                    zoomOnPinch
-                    aria-label="Canvas"
-                >
-                    <Background
-                        variant={BackgroundVariant.Dots}
-                        gap={24}
-                        size={1}
-                        color="var(--muted-foreground)"
-                        style={{ opacity: 1 }}
+                <CanvasControllerProvider projectId={projectId} userId={userId}>
+                    <CanvasEditor
+                        viewport={viewport}
+                        onViewportChange={setViewport}
                     />
-                </ReactFlow>
-                <CanvasViewportControls viewport={viewport} />
+                    <CanvasViewportControls viewport={viewport} />
+                </CanvasControllerProvider>
             </ReactFlowProvider>
         </div>
     );

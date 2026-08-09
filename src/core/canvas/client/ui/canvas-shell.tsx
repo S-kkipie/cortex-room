@@ -5,9 +5,13 @@ import { SignOutButton } from "@/frontend/components/auth/sign-out-button";
 import { Button } from "@/frontend/components/ui/button";
 
 export function CanvasShell({
+    projectId,
+    userId,
     projectName,
     userLabel,
 }: {
+    projectId: string;
+    userId: string;
     projectName: string;
     userLabel: string;
 }) {
@@ -42,7 +46,7 @@ export function CanvasShell({
                 </div>
             </header>
             <main className="relative flex min-h-0 flex-1 overflow-hidden">
-                <NavigableCanvas />
+                <NavigableCanvas projectId={projectId} userId={userId} />
             </main>
         </div>
     );

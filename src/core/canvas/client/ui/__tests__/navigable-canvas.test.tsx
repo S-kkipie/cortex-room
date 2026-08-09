@@ -8,7 +8,7 @@ import { NavigableCanvas } from "@/core/canvas/client/ui/navigable-canvas";
 type MockViewport = { x: number; y: number; zoom: number };
 
 type MockFlowProps = {
-    nodes: unknown[];
+    defaultNodes?: unknown[];
     edges: unknown[];
     minZoom: number;
     maxZoom: number;
@@ -23,7 +23,52 @@ type MockFlowProps = {
 const flowMock = vi.hoisted(() => ({
     zoomTo: vi.fn(),
     setViewport: vi.fn(),
+    setNodes: vi.fn(),
     reactFlowProps: null as MockFlowProps | null,
+}));
+
+const contextMock = vi.hoisted(() => ({
+    snapshot: null,
+    isLoading: false,
+    error: null,
+    retry: vi.fn(),
+    actions: {
+        createElement: vi.fn(),
+        updateElement: vi.fn(),
+        moveElement: vi.fn(),
+        resizeElement: vi.fn(),
+        deleteElement: vi.fn(),
+        selectElements: vi.fn(),
+        getElement: vi.fn(),
+        getElements: vi.fn(),
+        getSelectedElements: vi.fn(),
+    },
+    activeTool: "select",
+    setActiveTool: vi.fn(),
+    selectedElementIds: [],
+    editingElementId: null,
+    textDrafts: {},
+    previews: new Map(),
+    setMovePreview: vi.fn(),
+    setResizePreview: vi.fn(),
+    clearPreview: vi.fn(),
+    getPreview: vi.fn(),
+    beginEditing: vi.fn(),
+    setTextDraft: vi.fn(),
+    confirmEditing: vi.fn(),
+    cancelEditing: vi.fn(),
+    fitViewHasRun: false,
+    markFitViewComplete: vi.fn(),
+}));
+
+vi.mock("@/core/canvas/client/controller/canvas-controller-context", () => ({
+    CanvasControllerProvider: ({ children }: { children: ReactNode }) =>
+        createElement(
+            "div",
+            { "data-testid": "controller-provider" },
+            children,
+        ),
+    useCanvasController: () => contextMock,
 }));
 
 vi.mock("@xyflow/react", () => ({
@@ -56,7 +101,7 @@ vi.mock("@xyflow/react", () => ({
             "div",
             {
                 "data-testid": "react-flow",
-                "data-node-count": props.nodes.length,
+                "data-node-count": props.defaultNodes?.length ?? 0,
                 "data-edge-count": props.edges.length,
                 "data-min-zoom": props.minZoom,
                 "data-max-zoom": props.maxZoom,
@@ -89,7 +134,12 @@ afterEach(() => {
 
 describe("NavigableCanvas", () => {
     it("mounts an empty bounded flow with a dotted background and native gestures", () => {
-        const view = render(createElement(NavigableCanvas));
+        const view = render(
+            createElement(NavigableCanvas, {
+                projectId: "550e8400-e29b-41d4-a716-446655440000",
+                userId: "user-1",
+            }),
+        );
         const flow = view.container.querySelector('[data-testid="react-flow"]');
 
         expect(flow?.getAttribute("data-node-count")).toBe("0");
@@ -114,14 +164,19 @@ describe("NavigableCanvas", () => {
             view.container
                 .querySelector('[data-testid="canvas-background"]')
                 ?.getAttribute("data-opacity"),
-        ).toBe("0.35");
+        ).toBe("1");
         expect(view.container.querySelector('[role="group"]')).toBeNull();
         expect(view.container.querySelector("fieldset")).not.toBeNull();
         view.unmount();
     });
 
     it("updates the local percentage when React Flow reports a viewport change", () => {
-        const view = render(createElement(NavigableCanvas));
+        const view = render(
+            createElement(NavigableCanvas, {
+                projectId: "550e8400-e29b-41d4-a716-446655440000",
+                userId: "user-1",
+            }),
+        );
 
         act(() => {
             flowMock.reactFlowProps?.onViewportChange({
