@@ -51,7 +51,10 @@ export async function startAgentAction(
                 message: `Error ${res.status}: ${await res.text()}`,
             };
         }
-        return { ok: true, message: "Agente uniéndose al Meet…" };
+        return {
+            ok: true,
+            message: "✓ Agente en la reunión. Habla y las notas aparecerán solas.",
+        };
     } catch (cause) {
         return {
             ok: false,
