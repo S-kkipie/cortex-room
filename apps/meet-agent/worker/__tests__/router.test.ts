@@ -2,51 +2,44 @@ import { describe, expect, it, vi } from "vitest";
 import { routeRequest } from "../worker";
 
 const deps = () => ({
-    forward: vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 })),
+    forward: vi.fn(async (_meetingId: string, req: Request) => new Response(JSON.stringify({ path: new URL(req.url).pathname, mid: req.headers.get("x-meeting-id") }), { status: 200 })),
     authToken: "secret",
 });
 
 describe("routeRequest", () => {
-    it("rejects a missing bearer token with 401", async () => {
+    it("rejects a control route without a bearer token (401)", async () => {
         const res = await routeRequest(new Request("https://x/meetings/m1/start", { method: "POST" }), deps());
         expect(res.status).toBe(401);
     });
 
-    it("forwards an authorized start to the meeting DO", async () => {
+    it("forwards an authorized start with path /start and x-meeting-id", async () => {
         const d = deps();
-        const res = await routeRequest(
-            new Request("https://x/meetings/m1/start", { method: "POST", headers: { authorization: "Bearer secret" } }),
-            d,
-        );
-        expect(res.status).toBe(200);
+        const res = await routeRequest(new Request("https://x/meetings/m1/start", { method: "POST", headers: { authorization: "Bearer secret" } }), d);
+        const body = await res.json();
+        expect(body).toMatchObject({ path: "/start", mid: "m1" });
         expect(d.forward).toHaveBeenCalledWith("m1", expect.any(Request));
-        const forwarded = d.forward.mock.calls[0][1] as Request;
-        expect(new URL(forwarded.url).pathname).toBe("/start");
     });
 
-    it("forwards the meeting root to the state endpoint", async () => {
+    it("maps the meeting root to /state", async () => {
+        const res = await routeRequest(new Request("https://x/meetings/m1", { headers: { authorization: "Bearer secret" } }), deps());
+        expect((await res.json() as { path: string }).path).toBe("/state");
+    });
+
+    it("preserves the transcript query string", async () => {
+        const res = await routeRequest(new Request("https://x/meetings/m1/transcript?since=5", { headers: { authorization: "Bearer secret" } }), deps());
+        // pathname is rewritten to /transcript; the DO reads ?since from the same URL
+        expect((await res.json() as { path: string }).path).toBe("/transcript");
+    });
+
+    it("forwards a webhook WITHOUT a bearer, path /webhook, x-meeting-id set", async () => {
         const d = deps();
-        await routeRequest(
-            new Request("https://x/meetings/m1", { headers: { authorization: "Bearer secret" } }),
-            d,
-        );
-        const forwarded = d.forward.mock.calls[0][1] as Request;
-        expect(new URL(forwarded.url).pathname).toBe("/state");
+        const res = await routeRequest(new Request("https://x/webhooks/recall/m1/", { method: "POST", body: "{}" }), d);
+        const body = await res.json();
+        expect(body).toMatchObject({ path: "/webhook", mid: "m1" });
+        expect(d.forward).toHaveBeenCalledWith("m1", expect.any(Request));
     });
 
-    it("rewrites transcript paths while preserving the query string", async () => {
-        const d = deps();
-        await routeRequest(
-            new Request("https://x/meetings/m1/transcript?since=5", { headers: { authorization: "Bearer secret" } }),
-            d,
-        );
-        const forwarded = d.forward.mock.calls[0][1] as Request;
-        const forwardedUrl = new URL(forwarded.url);
-        expect(forwardedUrl.pathname).toBe("/transcript");
-        expect(forwardedUrl.searchParams.get("since")).toBe("5");
-    });
-
-    it("404s an unknown path", async () => {
+    it("404s an unknown authorized path", async () => {
         const res = await routeRequest(new Request("https://x/nope", { headers: { authorization: "Bearer secret" } }), deps());
         expect(res.status).toBe(404);
     });

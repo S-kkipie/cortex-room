@@ -10,23 +10,35 @@ export type RouteDeps = {
     authToken: string;
 };
 
-const MEETING_RE = /^\/meetings\/([^/]+)(\/(start|stop|transcript|stream))?$/;
+const CONTROL_RE = /^\/meetings\/([^/]+)(\/(start|stop|transcript|stream))?$/;
+const WEBHOOK_RE = /^\/webhooks\/recall\/([^/]+)\/?$/;
+
+function forwardTo(deps: RouteDeps, meetingId: string, url: URL, req: Request): Promise<Response> {
+    const headers = new Headers(req.headers);
+    headers.set("x-meeting-id", meetingId);
+    const init = { method: req.method, headers, body: req.body, duplex: "half" } as RequestInit;
+    return deps.forward(meetingId, new Request(url, init));
+}
 
 export async function routeRequest(req: Request, deps: RouteDeps): Promise<Response> {
+    const url = new URL(req.url);
+
+    // Recall webhook: HMAC-verified inside the DO, NOT bearer-authed.
+    const wh = url.pathname.match(WEBHOOK_RE);
+    if (wh) {
+        const target = new URL(url);
+        target.pathname = "/webhook";
+        return forwardTo(deps, wh[1], target, req);
+    }
+
     const auth = req.headers.get("authorization");
     if (auth !== `Bearer ${deps.authToken}`) return new Response("unauthorized", { status: 401 });
 
-    const url = new URL(req.url);
-    const m = url.pathname.match(MEETING_RE);
+    const m = url.pathname.match(CONTROL_RE);
     if (!m) return new Response("not found", { status: 404 });
-    const meetingId = m[1];
-    url.pathname = m[2] ?? "/state";
-    const forwarded = new Request(url, {
-        method: req.method,
-        headers: req.headers,
-        body: req.body,
-    });
-    return deps.forward(meetingId, forwarded);
+    const target = new URL(url);
+    target.pathname = m[2] ?? "/state";
+    return forwardTo(deps, m[1], target, req);
 }
 
 export type Env = {
