@@ -25,6 +25,34 @@ describe("handleRecallWebhook", () => {
         expect(res.events[0].type).toBe("transcript.segment");
     });
 
+    it("anchors participant events and not transcript events", async () => {
+        const absolute = "2026-08-08T12:00:10.000Z";
+        const relative = 10.5;
+        const participantBody = JSON.stringify({
+            event: "participant_events.join",
+            data: { data: { participant: { id: 5, name: "Ada" }, timestamp: { absolute, relative } } },
+        });
+        const participantHeaders = {
+            "webhook-id": "participant-1",
+            "webhook-timestamp": "1",
+            "webhook-signature": await sign("participant-1", "1", participantBody),
+        };
+        const participantRes = await handleRecallWebhook({ ...base, rawBody: participantBody, headers: participantHeaders });
+        expect(participantRes.anchorT0Ms).toBe(Date.parse(absolute) - relative * 1000);
+
+        const transcriptBody = JSON.stringify({
+            event: "transcript.data",
+            data: { data: { words: [], participant: null, timestamp: { absolute, relative } } },
+        });
+        const transcriptHeaders = {
+            "webhook-id": "transcript-1",
+            "webhook-timestamp": "1",
+            "webhook-signature": await sign("transcript-1", "1", transcriptBody),
+        };
+        const transcriptRes = await handleRecallWebhook({ ...base, rawBody: transcriptBody, headers: transcriptHeaders });
+        expect(transcriptRes.anchorT0Ms).toBeNull();
+    });
+
     it("rejects an invalid signature with 401 and no events", async () => {
         const body = JSON.stringify({ event: "transcript.data", data: { data: { words: [], participant: null } } });
         const res = await handleRecallWebhook({ ...base, rawBody: body, headers: { "webhook-id": "w2", "webhook-timestamp": "1", "webhook-signature": "v1,bad" } });

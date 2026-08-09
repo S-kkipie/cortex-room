@@ -68,6 +68,7 @@ export class MeetingAgent extends DurableObject<Env> {
     private publisher: Publisher | null = null;
     private meetingId = "";
     private t0Ms = 0;
+    private t0Anchored: number | null = null;
     private botId: string | null = null;
     private state: SessionState = "idle";
 
@@ -94,16 +95,21 @@ export class MeetingAgent extends DurableObject<Env> {
         if (req.method === "POST" && path === "/start") {
             const { meetingUrl } = (await req.json()) as { meetingUrl?: string };
             if (!meetingUrl) return new Response("meetingUrl required", { status: 400 });
+            let botId: string;
+            try {
+                ({ botId } = await createRecallBot({
+                    apiKey: this.env.RECALL_API_KEY,
+                    region: this.env.RECALL_REGION,
+                    meetingUrl,
+                    webhookUrl: `${this.env.PUBLIC_BASE_URL}/webhooks/recall/${this.meetingId}/`,
+                    events: RECALL_EVENTS,
+                }));
+            } catch (err) {
+                return new Response(err instanceof Error ? err.message : "recall create failed", { status: 502 });
+            }
+            this.botId = botId;
             this.t0Ms = Date.now();
             this.state = "in_meeting";
-            const { botId } = await createRecallBot({
-                apiKey: this.env.RECALL_API_KEY,
-                region: this.env.RECALL_REGION,
-                meetingUrl,
-                webhookUrl: `${this.env.PUBLIC_BASE_URL}/webhooks/recall/${this.meetingId}/`,
-                events: RECALL_EVENTS,
-            });
-            this.botId = botId;
             this.emit({ type: "session.started", meetingId: this.meetingId, at: new Date(this.t0Ms).toISOString() });
             return Response.json({ botId, state: this.state });
         }
@@ -144,11 +150,12 @@ export class MeetingAgent extends DurableObject<Env> {
                 rawBody,
                 headers: headerRecord(req.headers),
                 secret: this.env.RECALL_WEBHOOK_SECRET,
-                t0Ms: this.t0Ms || Date.now(),
+                t0Ms: this.t0Anchored ?? this.t0Ms ?? Date.now(),
                 meetingId: this.meetingId,
                 genId: () => crypto.randomUUID(),
             });
             if (res.status !== 200) return new Response("unauthorized", { status: res.status });
+            if (res.anchorT0Ms != null && this.t0Anchored == null) this.t0Anchored = res.anchorT0Ms;
             if (res.webhookId && this.seen.has(res.webhookId)) return new Response("ok", { status: 200 });
             if (res.webhookId) this.seen.add(res.webhookId);
             for (const ev of res.events) this.emit(ev);

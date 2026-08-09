@@ -9,11 +9,11 @@ export async function handleRecallWebhook(args: {
     t0Ms: number;
     meetingId: string;
     genId: () => string;
-}): Promise<{ status: 200 | 401; events: AgentEvent[]; webhookId: string | null }> {
+}): Promise<{ status: 200 | 401; events: AgentEvent[]; webhookId: string | null; anchorT0Ms: number | null }> {
     const { rawBody, headers, secret, t0Ms, meetingId, genId } = args;
 
     const ok = await verifyRecallSignature({ secret, headers, rawBody });
-    if (!ok) return { status: 401, events: [], webhookId: null };
+    if (!ok) return { status: 401, events: [], webhookId: null, anchorT0Ms: null };
 
     const webhookId = headers["webhook-id"] ?? headers["svix-id"] ?? null;
 
@@ -21,8 +21,21 @@ export async function handleRecallWebhook(args: {
     try {
         payload = JSON.parse(rawBody);
     } catch {
-        return { status: 200, events: [], webhookId };
+        return { status: 200, events: [], webhookId, anchorT0Ms: null };
     }
 
-    return { status: 200, events: mapRecallEvent(payload, { meetingId, t0Ms, genId }), webhookId };
+    const parsed = payload as { event?: unknown; data?: { data?: { timestamp?: { absolute?: unknown; relative?: unknown } } } };
+    const timestamp = parsed.data?.data?.timestamp;
+    const absolute = timestamp?.absolute;
+    const relative = timestamp?.relative;
+    const parsedAbsolute = typeof absolute === "string" ? Date.parse(absolute) : Number.NaN;
+    const anchorT0Ms =
+        typeof parsed.event === "string" &&
+        parsed.event.startsWith("participant_events.") &&
+        typeof relative === "number" &&
+        Number.isFinite(parsedAbsolute)
+            ? parsedAbsolute - relative * 1000
+            : null;
+
+    return { status: 200, events: mapRecallEvent(payload, { meetingId, t0Ms, genId }), webhookId, anchorT0Ms };
 }
