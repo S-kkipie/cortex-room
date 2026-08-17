@@ -19,7 +19,7 @@ export async function createRecallBot(
             recording_config: {
                 // prioritize_low_latency is English-only; accuracy mode supports
                 // multilingual meetings (Spanish/English) at a small latency cost.
-                transcript: { provider: { deepgram_streaming: { language: "es" } } },
+                transcript: { provider: { recallai_streaming: { language: "es" } } },
                 realtime_endpoints: [{ type: "webhook", url: args.webhookUrl, events: args.events ?? RECALL_EVENTS }],
             },
         }),

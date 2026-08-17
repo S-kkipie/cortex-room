@@ -50,7 +50,7 @@ export function createGeminiExtractor(opts: {
     model?: string;
     fetchImpl?: typeof fetch;
 }): ExtractImpl {
-    const model = opts.model ?? "gemini-2.0-flash";
+    const model = opts.model ?? "gemini-2.5-flash";
     const doFetch = opts.fetchImpl ?? fetch;
     return async (prompt) => {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${opts.apiKey}`;

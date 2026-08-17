@@ -15,7 +15,7 @@ describe("createRecallBot", () => {
         expect((init as RequestInit & { headers: Record<string, string> }).headers.authorization).toBe("KEY");
         const body = JSON.parse((init as RequestInit).body as string);
         expect(body.meeting_url).toBe("https://meet.google.com/abc");
-        expect(body.recording_config.transcript.provider.deepgram_streaming.language).toBe("es");
+        expect(body.recording_config.transcript.provider.recallai_streaming.language).toBe("es");
         expect(body.recording_config.realtime_endpoints[0]).toMatchObject({ type: "webhook", url: "https://x/webhooks/recall/m1/", events: RECALL_EVENTS });
     });
 

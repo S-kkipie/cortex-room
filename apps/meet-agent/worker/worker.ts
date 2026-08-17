@@ -149,10 +149,42 @@ export class MeetingAgent extends DurableObject<Env> {
             );
     }
 
+    private buildBridge(projectId: string): Bridge {
+        return new Bridge({
+            projectId,
+            extractImpl: createGeminiExtractor({ apiKey: this.env.GEMINI_API_KEY }),
+            publisher: createCanvasPublisher({
+                apiKey: this.env.PORTAL_API_KEY,
+                secretKey: this.env.PORTAL_SECRET_KEY,
+                projectId,
+            }),
+            participants: () => this.participants.values(),
+            genId: () => crypto.randomUUID(),
+            now: () => Date.now(),
+            nowIso: () => new Date().toISOString(),
+        });
+    }
+
+    // The Bridge lives in memory and is built at /start, but a Durable Object
+    // can be evicted mid-meeting. Webhooks then reload the DO with bridge=null
+    // and note generation would silently stop. Rebuild it from the persisted
+    // canvasProjectId so it survives eviction; /stop clears that key to end it.
+    private async ensureBridge(): Promise<void> {
+        if (this.bridge) return;
+        const pid =
+            this.canvasProjectId ??
+            (await this.ctx.storage.get<string>("canvasProjectId")) ??
+            null;
+        if (!pid) return;
+        this.canvasProjectId = pid;
+        this.bridge = this.buildBridge(pid);
+    }
+
     async alarm(): Promise<void> {
-        const bridge = this.bridge;
-        if (bridge === null || !shouldContinueAlarm(this.state, true)) return;
-        await bridge.flush().catch(() => {});
+        await this.ensureBridge();
+        // No persisted project → the meeting ended; let the alarm loop die.
+        if (!this.bridge) return;
+        await this.bridge.flush().catch(() => {});
         await this.ctx.storage.setAlarm(Date.now() + ALARM_INTERVAL_MS);
     }
 
@@ -191,22 +223,13 @@ export class MeetingAgent extends DurableObject<Env> {
             }
             this.canvasProjectId = canvasProjectId ?? null;
             this.bridge = canvasProjectId
-                ? new Bridge({
-                      projectId: canvasProjectId,
-                      extractImpl: createGeminiExtractor({
-                          apiKey: this.env.GEMINI_API_KEY,
-                      }),
-                      publisher: createCanvasPublisher({
-                          apiKey: this.env.PORTAL_API_KEY,
-                          secretKey: this.env.PORTAL_SECRET_KEY,
-                          projectId: canvasProjectId,
-                      }),
-                      participants: () => this.participants.values(),
-                      genId: () => crypto.randomUUID(),
-                      now: () => Date.now(),
-                      nowIso: () => new Date().toISOString(),
-                  })
+                ? this.buildBridge(canvasProjectId)
                 : null;
+            if (canvasProjectId) {
+                await this.ctx.storage.put("canvasProjectId", canvasProjectId);
+            } else {
+                await this.ctx.storage.delete("canvasProjectId");
+            }
             this.botId = botId;
             this.t0Ms = Date.now();
             this.state = "in_meeting";
@@ -231,6 +254,9 @@ export class MeetingAgent extends DurableObject<Env> {
             }
             if (this.bridge) await this.bridge.flush().catch(() => {});
             await this.ctx.storage.deleteAlarm();
+            await this.ctx.storage.delete("canvasProjectId");
+            this.bridge = null;
+            this.canvasProjectId = null;
             this.state = "ended";
             this.emit({
                 type: "session.ended",
@@ -289,6 +315,12 @@ export class MeetingAgent extends DurableObject<Env> {
             if (res.webhookId && this.seen.has(res.webhookId))
                 return new Response("ok", { status: 200 });
             if (res.webhookId) this.seen.add(res.webhookId);
+            // Rebuild the bridge if the DO was evicted since /start, so a live
+            // meeting keeps generating notes across evictions.
+            await this.ensureBridge();
+            if (this.bridge && (await this.ctx.storage.getAlarm()) == null) {
+                await this.ctx.storage.setAlarm(Date.now() + ALARM_INTERVAL_MS);
+            }
             for (const ev of res.events) this.emit(ev);
             return new Response("ok", { status: 200 });
         }

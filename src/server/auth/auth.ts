@@ -17,6 +17,7 @@ export const auth = betterAuth({
     // same-origin sign-in from a proxied host is not rejected as untrusted.
     trustedOrigins: [
         ServerConfig.baseUrl,
+        "https://*.vercel.app",
         "https://*.pirulines.net",
         "http://*.pirulines.net",
     ],

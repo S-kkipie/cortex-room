@@ -50,10 +50,10 @@ describe("createGeminiExtractor", () => {
                 { status: 200 },
             ),
         ) as unknown as typeof fetch;
-        const extract = createGeminiExtractor({ apiKey: "k", model: "gemini-2.0-flash", fetchImpl });
+        const extract = createGeminiExtractor({ apiKey: "k", model: "gemini-2.5-flash", fetchImpl });
         const raw = await extract("prompt");
         expect(raw).toBe(fixture);
         const url = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-        expect(url).toContain("gemini-2.0-flash:generateContent");
+        expect(url).toContain("gemini-2.5-flash:generateContent");
     });
 });
